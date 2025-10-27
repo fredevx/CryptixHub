@@ -1,6 +1,7 @@
 -- LocalScript -> StarterGui
--- Criptix Hub | v1.3 (WindUI Edition)
--- Loads WindUI remotely and builds the Criptix Hub with User disabled (no real user shown)
+-- Criptix Hub | v1.3.1 (WindUI Hotfix)
+-- Loads WindUI from remote each time, waits for UI to initialize before creating tabs
+-- Ensures WindUI User is disabled (no player data shown)
 
 -- Services
 local Players = game:GetService("Players")
@@ -15,22 +16,23 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- CONFIG
+-- Config
 local HUB_NAME = "Criptix Hub"
-local VERSION = "v1.3"
+local VERSION = "v1.3.1"
 local TITLE = HUB_NAME .. " | " .. VERSION .. " 🌐"
+local WINDUI_URL = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
 
--- Settings persistence
-local SETTINGS_FILE = "CriptixHub_v1_3_windui.json"
+-- Persistence
+local SETTINGS_FILE = "CriptixHub_v1_3_1_windui.json"
 local hasFileApi = (type(writefile) == "function") and (type(readfile) == "function") and (type(isfile) == "function")
+
 local Defaults = {
-    -- UI
     theme = "Dark",
     ui_transparency = 0.12,
     toggle_key = "RightControl",
     save_settings = true,
     minimizer_pos = {x = 12, y = 24},
-    -- features
+
     walk_toggle = false, walk_speed = 32,
     jump_toggle = false, jump_power = 50,
     noclip = false, god = false,
@@ -40,15 +42,14 @@ local Defaults = {
 }
 local Settings = {}
 
+-- Save/load helpers
 local function loadFromFile()
     local ok, res = pcall(function()
         if hasFileApi then
             if isfile(SETTINGS_FILE) then
-                local j = readfile(SETTINGS_FILE)
-                return HttpService:JSONDecode(j)
-            else
-                return nil
+                return HttpService:JSONDecode(readfile(SETTINGS_FILE))
             end
+            return nil
         else
             if getgenv().CriptixHub_Settings then
                 return HttpService:JSONDecode(getgenv().CriptixHub_Settings)
@@ -62,11 +63,7 @@ end
 local function saveToFile(tbl)
     local ok,err = pcall(function()
         local j = HttpService:JSONEncode(tbl)
-        if hasFileApi then
-            writefile(SETTINGS_FILE, j)
-        else
-            getgenv().CriptixHub_Settings = j
-        end
+        if hasFileApi then writefile(SETTINGS_FILE, j) else getgenv().CriptixHub_Settings = j end
     end)
     return ok,err
 end
@@ -83,8 +80,9 @@ end
 local function saveSettings()
     if Settings.save_settings then
         local ok,err = saveToFile(Settings)
-        if ok then pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Settings saved", Duration=2}) end)
-        else warn("Save failed:", err) end
+        if ok then pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Settings saved", Duration=2}) end) else warn("[CriptixHub] Save failed:", err) end
+    else
+        pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Save disabled", Duration=2}) end)
     end
 end
 
@@ -93,10 +91,10 @@ local function resetToDefaults()
     pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Defaults applied", Duration=2}) end)
 end
 
--- init settings
+-- Init settings
 loadSettings()
 
--- ---------- Gameplay helpers (best-effort client-side) ----------
+-- ---------- Gameplay helpers ----------
 local function getHumanoid()
     local c = player.Character
     if not c then return nil end
@@ -112,7 +110,7 @@ local function safeSetJumpPower(j)
     if hum then pcall(function() hum.JumpPower = j end) end
 end
 
--- Noclip
+-- NoClip
 local noclipConn
 local function setNoClip(enabled)
     if enabled then
@@ -120,23 +118,19 @@ local function setNoClip(enabled)
         noclipConn = RunService.Stepped:Connect(function()
             local ch = player.Character
             if ch then
-                for _,p in ipairs(ch:GetDescendants()) do
-                    if p:IsA("BasePart") then p.CanCollide = false end
-                end
+                for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
             end
         end)
     else
         if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
         local ch = player.Character
         if ch then
-            for _,p in ipairs(ch:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = true end
-            end
+            for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end
         end
     end
 end
 
--- God mode (client-side keep health)
+-- God Mode
 local godConn
 local function setGodMode(enabled)
     if enabled then
@@ -154,7 +148,7 @@ local function setGodMode(enabled)
     end
 end
 
--- Fly (simple client-side)
+-- Fly
 local flyBV, flyBG, flyConn
 local function setFly(enabled)
     if enabled then
@@ -177,7 +171,7 @@ local function setFly(enabled)
             if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0,1,0) end
             if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then mv = mv + Vector3.new(0,-1,0) end
             if mv.Magnitude > 0 then mv = mv.Unit * speed end
-            pcall(function() flyBV.Velocity = Vector3.new(mv.X, mv.Y, mv.Z) end)
+            pcall(function() if flyBV then flyBV.Velocity = Vector3.new(mv.X, mv.Y, mv.Z) end end)
             if flyBG and player.Character and Workspace.CurrentCamera then
                 local hrp2 = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChildWhichIsA("BasePart")
                 if hrp2 then flyBG.CFrame = CFrame.new(hrp2.Position, hrp2.Position + Workspace.CurrentCamera.CFrame.LookVector) end
@@ -207,7 +201,7 @@ local function setSpin(on, speed)
     end
 end
 
--- Rainbow body
+-- Rainbow
 local rainbowConn
 local function setRainbowBody(enabled)
     if enabled then
@@ -217,9 +211,7 @@ local function setRainbowBody(enabled)
             if ch then
                 local hue = (tick() % 5) / 5
                 local col = Color3.fromHSV(hue, 0.8, 1)
-                for _,p in ipairs(ch:GetDescendants()) do
-                    if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end
-                end
+                for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end end
             end
         end)
     else
@@ -241,7 +233,7 @@ local function setAntiAFK(enabled)
     end
 end
 
--- FPS boost
+-- FPS Boost
 local function doFPSBoost()
     for _,obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then pcall(function() obj.Enabled = false end)
@@ -260,7 +252,7 @@ end
 local function doRejoin() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 local function doServerHop() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 
--- Fling (Funny tab)
+-- Fling helpers
 local flingPart
 local function createFlingPart()
     if flingPart and flingPart.Parent then return end
@@ -289,24 +281,23 @@ local function doFlingOn(targetModel)
     flingPart = nil
 end
 
--- ---------- Load WindUI remotely ----------
-local windui_url = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+-- ---------- Load WindUI (remote, always) ----------
 local ok, ui = pcall(function()
-    return loadstring(game:HttpGet(windui_url, true))()
+    return loadstring(game:HttpGet(WINDUI_URL, true))()
 end)
 if not ok or type(ui) ~= "table" then
-    warn("[CriptixHub] Failed to load WindUI. URL:", windui_url)
-    pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Failed to load WindUI (check HTTP permissions)", Duration=4}) end)
+    warn("[CriptixHub] Failed to load WindUI from:", WINDUI_URL)
+    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Failed to load WindUI (HTTP disabled or URL down)", Duration = 4}) end)
     return
 end
 
--- Create window with User disabled (no user info shown)
+-- Create window with User disabled
 local win = ui:CreateWindow({
     Title = TITLE,
-    Icon = "", -- optional: insert asset id like "rbxassetid://<id>" if wanted
+    Icon = "",
     Author = "Criptix",
     Folder = "CriptixHub",
-    Size = UDim2.fromOffset(700, 360),
+    Size = UDim2.fromOffset(720, 380),
     Transparent = true,
     Theme = "Dark",
     Resizable = true,
@@ -316,37 +307,59 @@ local win = ui:CreateWindow({
     HideSearchBar = true,
     ScrollBarEnabled = false,
     User = {
-        Enabled = false,      -- <<< IMPORTANT: User disabled entirely (no real user shown)
+        Enabled = false,    -- NO user data shown
         Anonymous = false
     },
 })
 
--- Open-button (WindUI's small button to open/close); keep default behavior from WindUI
-win:EditOpenButton({
-    Title = HUB_NAME,
-    UseRound = true,
-})
+-- Ensure WindUI had time to mount internal structures
+-- We wait briefly and then check for window readiness
+local function waitForWindUIReady(timeout)
+    timeout = timeout or 2
+    local t0 = tick()
+    while tick() - t0 < timeout do
+        -- Some WindUI versions expose methods like win.IsReady or ui.IsReady; if not, the short wait helps
+        if type(win) == "table" and win.Tab then
+            return true
+        end
+        task.wait(0.05)
+    end
+    return false
+end
 
--- Optional small notify on load
-ui:Notify({
-    Title = HUB_NAME,
-    Description = VERSION .. " loaded successfully!",
-    Duration = 3
-})
+-- Wait to avoid "This Tab is empty"
+if not waitForWindUIReady(2) then
+    -- still proceed but longer wait
+    task.wait(0.25)
+end
 
--- ---------- Tabs & Controls (Criptix structure) ----------
--- Helper to format numbers
-local function clampNum(n, a, b) return math.clamp(tonumber(n) or 0, a, b) end
+-- Edit open button (small round open button)
+win:EditOpenButton({ Title = HUB_NAME, UseRound = true })
 
--- TABS
-local Tabs = {
-    Main = win:Tab({Title = "Main", Icon = "house"}),
-    Funny = win:Tab({Title = "Funny", Icon = "mood-smile"}),
-    Misc = win:Tab({Title = "Misc", Icon = "sparkles"}),
-    Settings = win:Tab({Title = "Settings", Icon = "cog"}),
-    Info = win:Tab({Title = "Info", Icon = "info-circle"}),
-    SettingsUI = win:Tab({Title = "Settings UI", Icon = "paint"})
-}
+-- Short helper
+local function clampNum(n,a,b) return math.clamp(tonumber(n) or 0, a, b) end
+
+-- Create Tabs (after WindUI ready)
+local Tabs = {}
+local success, err = pcall(function()
+    Tabs.Main = win:Tab({Title = "Main", Icon = "house"})
+    Tabs.Funny = win:Tab({Title = "Funny", Icon = "mood-smile"})
+    Tabs.Misc = win:Tab({Title = "Misc", Icon = "sparkles"})
+    Tabs.Settings = win:Tab({Title = "Settings", Icon = "cog"})
+    Tabs.Info = win:Tab({Title = "Info", Icon = "info-circle"})
+    Tabs.SettingsUI = win:Tab({Title = "Settings UI", Icon = "paint"})
+end)
+if not success then
+    warn("[CriptixHub] Failed to create tabs:", err)
+    -- try a small delay and retry once
+    task.wait(0.2)
+    Tabs.Main = win:Tab({Title = "Main", Icon = "house"})
+    Tabs.Funny = win:Tab({Title = "Funny", Icon = "mood-smile"})
+    Tabs.Misc = win:Tab({Title = "Misc", Icon = "sparkles"})
+    Tabs.Settings = win:Tab({Title = "Settings", Icon = "cog"})
+    Tabs.Info = win:Tab({Title = "Info", Icon = "info-circle"})
+    Tabs.SettingsUI = win:Tab({Title = "Settings UI", Icon = "paint"})
+end
 
 -- ---------- Info tab ----------
 local Info = Tabs.Info
@@ -354,6 +367,7 @@ Info:Label({Title = "Credits"})
 Info:Label({Title = "Principal Developer (Freddy Bear)"})
 Info:Label({Title = "Other Developers (snitadd, chatgpt, wind)"})
 Info:Label({Title = "Discord: paste your invite link here"})
+Info:Label({Title = "Version: "..VERSION})
 
 -- ---------- Main tab ----------
 local Main = Tabs.Main
@@ -429,20 +443,16 @@ local Funny = Tabs.Funny
 Funny:Label({Title = ":)"})
 Funny:Button({
     Title = "Walk on Wall (attempt)",
-    Callback = function()
-        -- best-effort attempt (game dependent). We notify instead of forcing universal behavior.
-        ui:Notify({Title = "Criptix", Description = "Walk on Wall attempted (game dependent)", Duration = 2})
-    end
+    Callback = function() ui:Notify({Title = HUB_NAME, Description = "Walk on Wall attempted (game dependent)", Duration = 2}) end
 })
--- Player dropdown + fake kick (non-destructive)
+-- Player dropdown + fake kick
 local playerNames = {}
 for _,pl in ipairs(Players:GetPlayers()) do if pl ~= player then table.insert(playerNames, pl.Name) end end
-local chosen = playerNames[1] or "No Players"
 local dd = Funny:Dropdown({
     Title = "Select Player",
     Multi = false,
-    Value = chosen,
-    List = playerNames
+    List = playerNames,
+    Value = playerNames[1] or "No Players"
 })
 Funny:Button({
     Title = "Fake Kick Player",
@@ -472,23 +482,20 @@ Funny:Slider({
     Value = {Min = 1, Max = 100, Default = Settings.spin_speed},
     Callback = function(val) Settings.spin_speed = clampNum(val,1,100); if Settings.spin_on then setSpin(true, Settings.spin_speed) end end
 })
--- Add fling quick activation
 Funny:Button({
     Title = "Enable Touch/Click Fling (10s)",
     Callback = function()
-        -- enable fling for 10 seconds; instruction shown to user
         ui:Notify({Title=HUB_NAME, Description="Fling active: click/touch a target (10s)", Duration=3})
-        -- set up temporary handlers
         local mouse = player:GetMouse()
-        local mconn
-        mconn = mouse.Button1Down:Connect(function()
+        local conn
+        conn = mouse.Button1Down:Connect(function()
             local t = mouse.Target
             if t then
                 local model = t:FindFirstAncestorOfClass("Model")
                 if model and model ~= player.Character then doFlingOn(model) end
             end
         end)
-        task.delay(10, function() if mconn then mconn:Disconnect() end; ui:Notify({Title=HUB_NAME, Description="Fling disabled", Duration=2}) end)
+        task.delay(10, function() if conn then conn:Disconnect() end; ui:Notify({Title=HUB_NAME, Description="Fling disabled", Duration=2}) end)
     end
 })
 
@@ -525,7 +532,6 @@ SettingsTab:Button({
     Title = "Load Settings",
     Callback = function()
         loadSettings()
-        -- reapply hooks based on loaded Settings
         if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) else safeSetWalkSpeed(16) end
         if Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) else safeSetJumpPower(50) end
         setNoClip(Settings.noclip)
@@ -577,12 +583,11 @@ SUI:Slider({
     Value = {Min = 0.0, Max = 0.8, Default = Settings.ui_transparency},
     Callback = function(val)
         Settings.ui_transparency = tonumber(val) or Defaults.ui_transparency
-        -- WindUI usually exposes methods; fallback: try to set window transparency if supported
         if win and win.SetTransparency then pcall(function() win:SetTransparency(Settings.ui_transparency) end) end
     end
 })
 
--- ---------- Wire toggle key to show/hide if possible ----------
+-- ---------- Toggle key wiring ----------
 local function getToggleKeyEnum(name)
     for _,k in ipairs(Enum.KeyCode:GetEnumItems()) do if k.Name == tostring(name) then return k end end
     return Enum.KeyCode.RightControl
@@ -591,11 +596,9 @@ local toggleKeyEnum = getToggleKeyEnum(Settings.toggle_key or Defaults.toggle_ke
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == toggleKeyEnum then
-        -- WindUI provides open/close via win:Toggle or similar; if not, simulate click on its open button
         if win and win.Toggle then pcall(function() win:Toggle() end) end
     end
 end)
--- keep updating enum if user changes key
 spawn(function()
     while true do
         local ek = getToggleKeyEnum(Settings.toggle_key or Defaults.toggle_key)
@@ -604,7 +607,7 @@ spawn(function()
     end
 end)
 
--- ---------- Apply persisted states on load ----------
+-- ---------- Apply persisted features ----------
 if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
 if Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
 setNoClip(Settings.noclip)
@@ -614,7 +617,7 @@ setRainbowBody(Settings.rainbow_body)
 setSpin(Settings.spin_on, Settings.spin_speed)
 setAntiAFK(Settings.anti_afk)
 
--- Ensure features reapply on respawn
+-- Reapply on respawn
 player.CharacterAdded:Connect(function()
     task.wait(0.6)
     if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
@@ -626,10 +629,10 @@ player.CharacterAdded:Connect(function()
     if Settings.spin_on then setSpin(true, Settings.spin_speed) end
 end)
 
--- Save settings on studio/close if possible
+-- Save on close
 game:BindToClose(function()
     if Settings.save_settings then pcall(function() saveSettings() end) end
 end)
 
--- Done
-ui:Notify({Title = HUB_NAME, Description = "Ready", Duration = 2})
+-- Final notify: everything initialized
+ui:Notify({Title = HUB_NAME, Description = "Criptix Hub started", Duration = 3})
