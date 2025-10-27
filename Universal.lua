@@ -1,6 +1,6 @@
 -- LocalScript -> StarterGui
--- Criptix Hub | v1.3
--- v1.3: Scroll + close/minimize + draggable + content fixed + minimizer remembers pos
+-- Criptix Hub | v1.3 🌐
+-- v1.3: Fixes: close/minimize, draggable, hidden scroll (no visible slider), animations, remembered minimizer pos
 -- Paste into StarterGui (Roblox LuaU / exploit environment)
 
 -- Services
@@ -47,7 +47,7 @@ local Defaults = {
 	minimizer_pos = { x = 12, y = 24 }
 }
 
--- Themes (black base + accents)
+-- Themes (black base + cian accent default)
 local Themes = {
 	Ocean = { bg = Color3.fromRGB(8,8,10), panel = Color3.fromRGB(18,18,20), accent = Color3.fromRGB(0,200,215), accent2 = Color3.fromRGB(28,140,255), text = Color3.fromRGB(230,230,230) },
 	Inferno = { bg = Color3.fromRGB(8,6,6), panel = Color3.fromRGB(18,12,12), accent = Color3.fromRGB(255,110,110), accent2 = Color3.fromRGB(255,170,120), text = Color3.fromRGB(245,235,230) },
@@ -59,10 +59,10 @@ local Themes = {
 -- Storage
 local Settings = {}
 
--- File API detection
+-- File API detection (exploit compatibility)
 local hasFileApi = (type(writefile) == "function") and (type(readfile) == "function") and (type(isfile) == "function")
 
--- JSON Save/Load (fallback to getgenv)
+-- JSON save/load (fallback to getgenv)
 local function saveToFile(tbl)
 	local ok,err = pcall(function()
 		local j = HttpService:JSONEncode(tbl)
@@ -136,9 +136,9 @@ local function safeSetJumpPower(j)
 	if hum then pcall(function() hum.JumpPower = j end) end
 end
 
--- ---------- Gameplay feature functions (best-effort client-side) ----------
--- NoClip
-local noclipConn
+-- ---------- Gameplay functions (best-effort, same as before) ----------
+local noclipConn, godConn, flyBV, flyBG, flyConn, spinConn, rainbowConn, antiAfkConn
+
 local function setNoClip(enabled)
 	if enabled then
 		if noclipConn then return end
@@ -153,8 +153,6 @@ local function setNoClip(enabled)
 	end
 end
 
--- God Mode
-local godConn
 local function setGodMode(enabled)
 	if enabled then
 		if godConn then return end
@@ -171,8 +169,6 @@ local function setGodMode(enabled)
 	end
 end
 
--- Fly
-local flyBV, flyBG, flyConn
 local function setFly(enabled)
 	if enabled then
 		if flyConn then return end
@@ -205,8 +201,6 @@ local function setFly(enabled)
 	end
 end
 
--- Spin
-local spinConn
 local function setSpin(on, speed)
 	if on then
 		if spinConn then return end
@@ -222,8 +216,6 @@ local function setSpin(on, speed)
 	end
 end
 
--- Rainbow
-local rainbowConn
 local function setRainbowBody(enabled)
 	if enabled then
 		if rainbowConn then return end
@@ -240,8 +232,6 @@ local function setRainbowBody(enabled)
 	end
 end
 
--- Anti AFK
-local antiAfkConn
 local function setAntiAFK(enabled)
 	if enabled then
 		if antiAfkConn then return end
@@ -254,7 +244,6 @@ local function setAntiAFK(enabled)
 	end
 end
 
--- FPS Boost
 local function doFPSBoost()
 	for _,obj in ipairs(Workspace:GetDescendants()) do
 		if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then pcall(function() obj.Enabled = false end)
@@ -273,7 +262,7 @@ end
 local function doRejoin() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 local function doServerHop() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 
--- Fling (touch/click)
+-- Fling helpers (same best-effort)
 local flingPart
 local function createFlingPart()
 	if flingPart and flingPart.Parent then return end
@@ -341,8 +330,8 @@ local function enableFlingMode(seconds)
 	end)
 end
 
--- ---------- UI BUILD (v1.3 final) ----------
--- Remove existing
+-- ---------- UI BUILD (fixed) ----------
+-- Destroy old
 local existing = playerGui:FindFirstChild(GUI_NAME)
 if existing then existing:Destroy() end
 
@@ -355,9 +344,9 @@ screenGui.Enabled = true
 
 -- helpers
 local function makeUICorner(parent, radius) local u = Instance.new("UICorner"); u.CornerRadius = radius or UDim.new(0,12); u.Parent = parent; return u end
-local function Tween(obj, props, t, style, dir) t = t or 0.2; style = style or Enum.EasingStyle.Quad; dir = dir or Enum.EasingDirection.Out; local tw = TweenService:Create(obj, TweenInfo.new(t, style, dir), props); tw:Play(); return tw end
+local function Tween(obj, props, t, style, dir) t = t or 0.18; style = style or Enum.EasingStyle.Quad; dir = dir or Enum.EasingDirection.Out; local tw = TweenService:Create(obj, TweenInfo.new(t, style, dir), props); tw:Play(); return tw end
 
--- Main Frame
+-- Main frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = WINDOW_SIZE
@@ -368,7 +357,7 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 makeUICorner(mainFrame, UDim.new(0,14))
 
--- Title (draggable)
+-- Title bar (draggable)
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1,0,0,56)
 titleBar.BackgroundTransparency = 1
@@ -385,10 +374,10 @@ titleLabel.Text = "🌐  " .. TITLE_TEXT
 titleLabel.TextXAlignment = Enum.TextXAlignment.Center
 titleLabel.Parent = titleBar
 
--- Top-right controls
+-- Top controls
 local topControls = Instance.new("Frame")
 topControls.Size = UDim2.new(0.3, -12, 1, 0)
-topControls.Position = UDim2.new(0.7, 6, 0, 0)
+topControls.Position = UDim2.new(0.68, 6, 0, 0)
 topControls.BackgroundTransparency = 1
 topControls.Parent = titleBar
 local topLayout = Instance.new("UIListLayout")
@@ -409,7 +398,6 @@ local function makeTopButton(symbol)
 	b.TextColor3 = Color3.fromRGB(230,230,230)
 	b.Parent = topControls
 	makeUICorner(b, UDim.new(0,8))
-	-- hover animation
 	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = Themes[Settings.theme].panel:lerp(Themes[Settings.theme].accent, 0.5)}, 0.12) end)
 	b.MouseLeave:Connect(function() Tween(b, {BackgroundColor3 = Color3.fromRGB(36,36,38)}, 0.12) end)
 	return b
@@ -418,7 +406,7 @@ end
 local minBtn = makeTopButton("—")
 local closeBtn = makeTopButton("✕")
 
--- Sidebar (tabs) higher so buttons visible
+-- Sidebar (tabs)
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0,160,1,-56)
 sidebar.Position = UDim2.new(0,0,0,56)
@@ -427,23 +415,24 @@ sidebar.BorderSizePixel = 0
 sidebar.Parent = mainFrame
 makeUICorner(sidebar, UDim.new(0,12))
 
-local tabContainer = Instance.new("ScrollingFrame")
+local tabContainer = Instance.new("Frame")
 tabContainer.Size = UDim2.new(1,0,0,140)
 tabContainer.Position = UDim2.new(0,0,0,12)
-tabContainer.CanvasSize = UDim2.new(0,0,0,0)
 tabContainer.BackgroundTransparency = 1
-tabContainer.ScrollBarThickness = 6
 tabContainer.Parent = sidebar
 local tabLayout = Instance.new("UIListLayout"); tabLayout.Padding = UDim.new(0,8); tabLayout.Parent = tabContainer; tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Content area (full use) -> ScrollingFrame
+-- Content area:
+-- Use ScrollingFrame for overflow but hide the visible scroll bar so no visible "deslizador"
 local content = Instance.new("ScrollingFrame")
 content.Name = "Content"
 content.Size = UDim2.new(1, -180, 1, -56)
 content.Position = UDim2.new(0,180,0,56)
 content.BackgroundColor3 = Themes[Settings.theme].bg
 content.BorderSizePixel = 0
-content.ScrollBarThickness = 8
+content.ScrollBarThickness = 6
+content.ScrollBarImageColor3 = Color3.new(1,1,1)
+content.ScrollBarImageTransparency = 1 -- hide visual scrollbar (no visible slider)
 content.CanvasSize = UDim2.new(0,0,0,0)
 content.Parent = mainFrame
 makeUICorner(content, UDim.new(0,12))
@@ -451,15 +440,12 @@ makeUICorner(content, UDim.new(0,12))
 local contentPadding = Instance.new("UIPadding"); contentPadding.PaddingTop = UDim.new(0,12); contentPadding.PaddingLeft = UDim.new(0,12); contentPadding.Parent = content
 local contentLayout = Instance.new("UIListLayout"); contentLayout.SortOrder = Enum.SortOrder.LayoutOrder; contentLayout.Padding = UDim.new(0,10); contentLayout.Parent = content
 
--- update CanvasSize when content changes
+-- update CanvasSize when content changes so it scrolls only if needed
 contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	content.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 12)
 end)
-tabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	tabContainer.CanvasSize = UDim2.new(0,0,0, tabLayout.AbsoluteContentSize.Y + 8)
-end)
 
--- Accent helpers
+-- theme helpers
 local function getTheme(name) return Themes[name] or Themes.Ocean end
 local function getAccent() return getTheme(Settings.theme).accent end
 local function updateAccent(themeName)
@@ -538,7 +524,7 @@ local function makeToggle(item)
 	return frame
 end
 
--- Slider (decimal=true -> step 0.1)
+-- Slider used only where required (transparency decimal enabled)
 local function makeSlider(item)
 	local frame = Instance.new("Frame"); frame.Size = UDim2.new(1, -24, 0, 54); frame.BackgroundTransparency = 1; frame.Parent = content
 	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(0.6,0,0,18); lbl.Position = UDim2.new(0,0,0,0); lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13; lbl.Text = item.text or "Slider"; lbl.TextColor3 = getTheme(Settings.theme).text; lbl.Parent = frame
@@ -562,9 +548,8 @@ local function makeSlider(item)
 	end
 	valLbl.Text = formatValue(Settings[item.id])
 
-	-- dragging
+	-- dragging (mouse & touch)
 	local dragging = false
-	local activeInput = nil
 	local function updateFromAbsX(absX)
 		local barPos = barBtn.AbsolutePosition.X
 		local barSize = barBtn.AbsoluteSize.X
@@ -587,25 +572,22 @@ local function makeSlider(item)
 		valLbl.Text = formatValue(Settings[item.id])
 		setFillFromValue(Settings[item.id])
 		-- live hooks
-		if item.id == "walk_speed" and Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
-		if item.id == "jump_power" and Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
-		if item.id == "fly_speed" then Settings.fly_speed = Settings[item.id] end
-		if item.id == "spin_speed" and Settings.spin_on then setSpin(true, Settings.spin_speed) end
 		if item.id == "ui_transparency" then
 			local t = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
 			mainFrame.BackgroundTransparency = t
 			content.BackgroundTransparency = t
 			sidebar.BackgroundTransparency = math.clamp(t * 0.2, 0, 0.9)
 		end
+		if item.id == "walk_speed" and Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
+		if item.id == "jump_power" and Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
 	end
 
 	barBtn.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
-			activeInput = input
 			updateFromAbsX(input.Position.X)
 			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then dragging = false; activeInput = nil end
+				if input.UserInputState == Enum.UserInputState.End then dragging = false end
 			end)
 		end
 	end)
@@ -663,7 +645,7 @@ local function clearContent()
 	end
 end
 
--- ---------- Tabs & content (exactly your table) ----------
+-- ---------- Tabs & content (table as you specified) ----------
 local tabButtons = {}
 local function createTabButton(name, order)
 	local b = Instance.new("TextButton")
@@ -688,7 +670,7 @@ local function createTabButtonsAndContent(defs)
 		btn.MouseButton1Click:Connect(function()
 			-- deselect
 			for _,tb in ipairs(tabButtons) do tb.BackgroundColor3 = Color3.fromRGB(36,36,38) end
-			-- select
+			-- select visuals
 			btn.BackgroundColor3 = getTheme(Settings.theme).panel:lerp(getAccent(), 0.25)
 			-- fill content
 			clearContent()
@@ -702,9 +684,8 @@ local function createTabButtonsAndContent(defs)
 				end
 			end
 
-			-- special: Funny -> player dropdown + Fake Kick button
+			-- Funny extra: player dropdown + Fake Kick
 			if def.name == "Funny" then
-				-- players dropdown
 				local pframe = Instance.new("Frame"); pframe.Size = UDim2.new(1,-24,0,36); pframe.BackgroundTransparency = 1; pframe.Parent = content
 				local plbl = Instance.new("TextLabel"); plbl.Size = UDim2.new(0.5,0,1,0); plbl.BackgroundTransparency = 1; plbl.Font = Enum.Font.Gotham; plbl.TextSize = 14; plbl.Text = "Select Player"; plbl.TextColor3 = getTheme(Settings.theme).text; plbl.TextXAlignment = Enum.TextXAlignment.Left; plbl.Parent = pframe
 				local dd = Instance.new("TextButton"); dd.Size = UDim2.new(0,200,0,28); dd.Position = UDim2.new(1,-12,0.5,-14); dd.AnchorPoint = Vector2.new(1,0.5); dd.Text = "Choose"; dd.Font = Enum.Font.GothamSemibold; dd.TextSize = 13; dd.BackgroundColor3 = Color3.fromRGB(50,50,50); dd.TextColor3 = getTheme(Settings.theme).text; dd.Parent = pframe; makeUICorner(dd, UDim.new(0,8))
@@ -718,7 +699,6 @@ local function createTabButtonsAndContent(defs)
 					if selIndex > #playersList then selIndex = 1 end
 					dd.Text = playersList[selIndex]
 				end)
-				-- Fake Kick button
 				makeButton("Fake Kick Player", function()
 					if dd.Text == "No players" then pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="No players to target", Duration=2}) end); return end
 					pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Fake kicked "..tostring(dd.Text), Duration=2}) end)
@@ -728,7 +708,7 @@ local function createTabButtonsAndContent(defs)
 	end
 end
 
--- UI definitions (from your table)
+-- UI definitions from your table
 local uiDefinitions = {
 	{ name = "Info", content = {
 		{ type="label", text = "Credits:" },
@@ -795,13 +775,13 @@ if tabButtons[1] then
 	tabButtons[1].MouseButton1Click:Fire()
 end
 
--- apply initial visuals
+-- visuals & apply
 updateAccent(Settings.theme or Defaults.theme)
 mainFrame.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
 content.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
 sidebar.BackgroundTransparency = tonumber(Settings.ui_transparency) or 0
 
--- apply persisted features
+-- apply features persisted
 if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
 if Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
 setNoClip(Settings.noclip)
@@ -811,16 +791,14 @@ setRainbowBody(Settings.rainbow_body)
 setSpin(Settings.spin_on, Settings.spin_speed)
 setAntiAFK(Settings.anti_afk)
 
--- Minimizer logic (🌐 icon) - remembers position
-local minimizerGui = nil
-local minimizerBtn = nil
+-- Minimizer (🌐) that remembers position
+local minimizerGui, minimizerBtn
 
 local function createMinimizer()
 	if minimizerGui and minimizerGui.Parent then return end
 	minimizerGui = Instance.new("ScreenGui"); minimizerGui.Name = GUI_NAME.."_MIN"; minimizerGui.ResetOnSpawn = false; minimizerGui.Parent = playerGui; minimizerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	minimizerBtn = Instance.new("ImageButton")
 	minimizerBtn.Size = UDim2.new(0,54,0,54)
-	-- read position (absolute offsets)
 	local pos = Settings.minimizer_pos or Defaults.minimizer_pos
 	minimizerBtn.Position = UDim2.new(0, pos.x or 12, 0, pos.y or 24)
 	minimizerBtn.BackgroundColor3 = getAccent()
@@ -830,7 +808,7 @@ local function createMinimizer()
 	makeUICorner(minimizerBtn, UDim.new(0,16))
 	local inner = Instance.new("TextLabel"); inner.Size = UDim2.new(1,0,1,0); inner.BackgroundTransparency = 1; inner.Text = "🌐"; inner.Font = Enum.Font.GothamBold; inner.TextSize = 24; inner.TextColor3 = Color3.fromRGB(20,20,20); inner.Parent = minimizerBtn
 
-	-- draggable and remember
+	-- draggable & remember
 	local dragging = false
 	local dragInput, dragStart, startPos
 	minimizerBtn.InputBegan:Connect(function(input)
@@ -841,7 +819,6 @@ local function createMinimizer()
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
-					-- remember absolute pos
 					local abs = minimizerBtn.AbsolutePosition
 					Settings.minimizer_pos = { x = abs.X, y = abs.Y }
 					if Settings.save_settings then saveSettings() end
@@ -863,31 +840,44 @@ local function createMinimizer()
 		if screenGui and screenGui.Parent then
 			screenGui.Enabled = true
 			if minimizerGui and minimizerGui.Parent then minimizerGui:Destroy(); minimizerGui = nil end
+			-- entrance animation
+			mainFrame.Position = UDim2.new(0.5, 0, -0.6, 0)
+			Tween(mainFrame, {Position = UDim2.new(0.5, 0, 0.48, 0), BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency}, 0.35)
 		end
 	end)
 end
 
 local function hideMainGui()
-	screenGui.Enabled = false
-	createMinimizer()
-end
-local function showMainGui()
-	screenGui.Enabled = true
-	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
-	if mg then mg:Destroy() end
+	-- fade out + hide, then create minimizer
+	Tween(mainFrame, {Position = UDim2.new(0.5, 0, -0.6, 0), BackgroundTransparency = 1}, 0.25)
+	task.delay(0.25, function()
+		if screenGui then screenGui.Enabled = false end
+		createMinimizer()
+	end)
 end
 
--- wire buttons
+local function showMainGui()
+	if screenGui then
+		screenGui.Enabled = true
+		local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
+		if mg then mg:Destroy() end
+		mainFrame.Position = UDim2.new(0.5, 0, -0.6, 0)
+		Tween(mainFrame, {Position = UDim2.new(0.5, 0, 0.48, 0), BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency}, 0.35)
+	end
+end
+
+-- wire close / minimize (guaranteed to work)
 minBtn.MouseButton1Click:Connect(function()
 	hideMainGui()
 end)
 closeBtn.MouseButton1Click:Connect(function()
+	-- destroy gui and minimizer
 	if screenGui and screenGui.Parent then screenGui:Destroy() end
 	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
 	if mg then mg:Destroy() end
 end)
 
--- toggle keybind
+-- Toggle keybind
 local function getToggleKey()
 	local k = Settings.toggle_key or "RightControl"
 	for _,ek in ipairs(Enum.KeyCode:GetEnumItems()) do if ek.Name == tostring(k) then return ek end end
@@ -908,7 +898,7 @@ spawn(function()
 	end
 end)
 
--- draggable mainFrame from titleBar (PC + mobile)
+-- Draggable mainFrame from titleBar (PC & mobile) - guaranteed to move GUI
 do
 	local dragging = false
 	local dragInput, dragStart, startPos
@@ -933,7 +923,7 @@ do
 	end)
 end
 
--- apply on character respawn
+-- On character respawn, reapply features
 player.CharacterAdded:Connect(function()
 	task.wait(0.6)
 	if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
@@ -945,13 +935,13 @@ player.CharacterAdded:Connect(function()
 	if Settings.spin_on then setSpin(true, Settings.spin_speed) end
 end)
 
--- entrance anim + accent
+-- Entrance anim + accent
 mainFrame.Position = UDim2.new(0.5, 0, -0.6, 0)
-Tween(mainFrame, {Position = UDim2.new(0.5, 0, 0.48, 0)}, 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+Tween(mainFrame, {Position = UDim2.new(0.5, 0, 0.48, 0)}, 0.42, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 updateAccent(Settings.theme or Defaults.theme)
 pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = HUB_NAME.." "..VERSION.." loaded", Duration = 2}) end)
 
--- save on close
+-- Save on close
 game:BindToClose(function() if Settings.save_settings then saveSettings() end end)
 
--- End of LocalScript (Criptix Hub | v1.3)
+-- End of LocalScript (Criptix Hub | v1.3 🌐)
