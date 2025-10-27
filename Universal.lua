@@ -1,6 +1,7 @@
 -- LocalScript -> StarterGui
 -- Criptix Hub | v1.3.3 (WindUI Full Sync Fix)
 -- Remote WindUI load + persistent loading message + robust wait until tabs fully rendered
+-- User display disabled
 
 -- Services
 local Players = game:GetService("Players")
@@ -21,7 +22,7 @@ local TITLE = HUB_NAME .. " | " .. VERSION .. " 🌐"
 local WINDUI_URL = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
 
 -- Persistence
-local SETTINGS_FILE = "CriptixHub_v1_3_3_windui.json"
+local SETTINGS_FILE = "CriptixHub_v1_3_windui.json"
 local hasFileApi = (type(writefile) == "function") and (type(readfile) == "function") and (type(isfile) == "function")
 
 local Defaults = {
@@ -29,7 +30,6 @@ local Defaults = {
     ui_transparency = 0.12,
     toggle_key = "RightControl",
     save_settings = true,
-    minimizer_pos = {x = 12, y = 24},
 
     walk_toggle = false, walk_speed = 32,
     jump_toggle = false, jump_power = 50,
@@ -279,7 +279,7 @@ local function doFlingOn(targetModel)
     flingPart = nil
 end
 
--- ---------- Load WindUI (remote) with persistent loading message + robust wait ----------
+-- ---------- Load WindUI (remote) with loading indicator and robust wait ----------
 local function tryLoadWindUI(url, timeout)
     timeout = timeout or 8
     local ok, ui = pcall(function()
@@ -315,10 +315,10 @@ end
 
 showPersistentLoading("Please wait, Criptix Hub is loading...")
 
-local ok, ui, terr = tryLoadWindUI(WINDUI_URL, 10)
+local ok, ui = tryLoadWindUI(WINDUI_URL, 10)
 if not ok or type(ui) ~= "table" then
     hidePersistentLoading()
-    warn("[CriptixHub] WindUI load error:", terr)
+    warn("[CriptixHub] WindUI load error")
     pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Error: could not load WindUI", Duration = 6}) end)
     return
 end
@@ -387,7 +387,7 @@ end
 
 local rendered = waitForWindUIRender(win, 8)
 if not rendered then
-    -- last fallback retry: small delay and another try
+    -- final attempt: small delay and another try
     task.wait(0.25)
     rendered = waitForWindUIRender(win, 4)
 end
@@ -414,9 +414,10 @@ if win and win.EditOpenButton then
     end)
 end
 
--- ---------- Create tabs + populate (safe now) ----------
+-- ---------- Build tabs and UI content (only after windui ready) ----------
 local function clampNum(n,a,b) return math.clamp(tonumber(n) or 0, a, b) end
 
+-- Defensive creation: try/catch and fallback
 local Tabs = {}
 local function createTabs()
     Tabs.Main = win:Tab({Title = "Main", Icon = "house"})
@@ -427,14 +428,13 @@ local function createTabs()
     Tabs.SettingsUI = win:Tab({Title = "Settings UI", Icon = "paint"})
 end
 
--- defensive create with retries
-local successCreate, createErr = pcall(createTabs)
-if not successCreate then
+local okc, errc = pcall(createTabs)
+if not okc then
+    -- retry after short wait
     task.wait(0.12)
     local okr, errr = pcall(createTabs)
     if not okr then
-        hidePersistentLoading()
-        warn("[CriptixHub] Failed to create tabs:", errr)
+        warn("[CriptixHub] Could not create WindUI Tabs:", errr)
         if ui and ui.Notify then ui:Notify({Title=HUB_NAME, Description="Error creating UI tabs", Duration=4}) end
         return
     end
@@ -713,8 +713,7 @@ game:BindToClose(function()
     if Settings.save_settings then pcall(function() saveSettings() end) end
 end)
 
--- Final ready notify (and ensure loading hidden)
-hidePersistentLoading()
+-- Final ready notify
 if ui and ui.Notify then
     ui:Notify({Title = HUB_NAME, Description = "Criptix Hub initialized successfully", Duration = 3})
 else
