@@ -1,8 +1,7 @@
 -- LocalScript -> StarterGui
--- CriptixHub | v1.3
--- v1.3: fixes -> scrolling, buttons (close/minimize), draggable GUI, minimizer remembers position
+-- Criptix Hub | v1.3
+-- v1.3: Scroll + close/minimize + draggable + content fixed + minimizer remembers pos
 -- Paste into StarterGui (Roblox LuaU / exploit environment)
--- NOTE: Many "game" features are best-effort client-side and may not work in all games.
 
 -- Services
 local Players = game:GetService("Players")
@@ -18,11 +17,11 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- CONFIG
-local HUB_NAME = "CriptixHub"
+local HUB_NAME = "Criptix Hub"
 local VERSION = "v1.3"
-local GUI_NAME = HUB_NAME .. "_GUI_v1_3"
+local GUI_NAME = "CriptixHub_GUI_v1_3"
 local TITLE_TEXT = HUB_NAME .. " | " .. VERSION
-local WINDOW_SIZE = UDim2.new(0, 620, 0, 400) -- slightly reduced
+local WINDOW_SIZE = UDim2.new(0, 620, 0, 420)
 local SETTINGS_FILE = "CriptixHub_v1_3_settings.json"
 
 -- Defaults
@@ -44,13 +43,13 @@ local Defaults = {
 	spin_on = false,
 	spin_speed = 20,
 	anti_afk = true,
-	-- minimizer remembered position (in offsets)
-	minimizer_pos = {x = 12, y = 20}
+	-- minimizer pos (Absolute offset)
+	minimizer_pos = { x = 12, y = 24 }
 }
 
--- Theme palettes (black base + accents)
+-- Themes (black base + accents)
 local Themes = {
-	Ocean = { bg = Color3.fromRGB(8,8,10), panel = Color3.fromRGB(18,18,20), accent = Color3.fromRGB(30,200,190), accent2 = Color3.fromRGB(28,140,255), text = Color3.fromRGB(230,230,230) },
+	Ocean = { bg = Color3.fromRGB(8,8,10), panel = Color3.fromRGB(18,18,20), accent = Color3.fromRGB(0,200,215), accent2 = Color3.fromRGB(28,140,255), text = Color3.fromRGB(230,230,230) },
 	Inferno = { bg = Color3.fromRGB(8,6,6), panel = Color3.fromRGB(18,12,12), accent = Color3.fromRGB(255,110,110), accent2 = Color3.fromRGB(255,170,120), text = Color3.fromRGB(245,235,230) },
 	Toxic = { bg = Color3.fromRGB(6,12,8), panel = Color3.fromRGB(14,20,16), accent = Color3.fromRGB(120,255,160), accent2 = Color3.fromRGB(170,255,140), text = Color3.fromRGB(235,245,230) },
 	Royal = { bg = Color3.fromRGB(10,6,14), panel = Color3.fromRGB(22,16,30), accent = Color3.fromRGB(200,90,220), accent2 = Color3.fromRGB(150,120,240), text = Color3.fromRGB(235,230,245) },
@@ -63,7 +62,7 @@ local Settings = {}
 -- File API detection
 local hasFileApi = (type(writefile) == "function") and (type(readfile) == "function") and (type(isfile) == "function")
 
--- JSON save/load (fallback to getgenv)
+-- JSON Save/Load (fallback to getgenv)
 local function saveToFile(tbl)
 	local ok,err = pcall(function()
 		local j = HttpService:JSONEncode(tbl)
@@ -117,11 +116,11 @@ local function resetToDefaults()
 	pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Defaults applied", Duration = 2}) end)
 end
 
--- init
+-- init settings
 loadSettings()
 for k,v in pairs(Defaults) do if Settings[k] == nil then Settings[k] = v end end
 
--- ---------- Basic character helpers ----------
+-- ---------- Character helpers ----------
 local function getCharacter() return player.Character or player.CharacterAdded:Wait() end
 local function getHumanoid()
 	local c = player.Character
@@ -137,11 +136,7 @@ local function safeSetJumpPower(j)
 	if hum then pcall(function() hum.JumpPower = j end) end
 end
 
--- ---------- Best-effort gameplay features (same as before) ----------
--- omitted repeated code details here for brevity in analysis reasoning; actual script includes the same feature functions:
--- setNoClip, setGodMode, setFly, setSpin, setRainbowBody, setAntiAFK, doFPSBoost, doRejoin, doServerHop, fling functions...
--- (they are included below in full; keep reading the script)
-
+-- ---------- Gameplay feature functions (best-effort client-side) ----------
 -- NoClip
 local noclipConn
 local function setNoClip(enabled)
@@ -149,20 +144,12 @@ local function setNoClip(enabled)
 		if noclipConn then return end
 		noclipConn = RunService.Stepped:Connect(function()
 			local ch = player.Character
-			if ch then
-				for _,p in ipairs(ch:GetDescendants()) do
-					if p:IsA("BasePart") then p.CanCollide = false end
-				end
-			end
+			if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
 		end)
 	else
 		if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
 		local ch = player.Character
-		if ch then
-			for _,p in ipairs(ch:GetDescendants()) do
-				if p:IsA("BasePart") then p.CanCollide = true end
-			end
-		end
+		if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
 	end
 end
 
@@ -235,7 +222,7 @@ local function setSpin(on, speed)
 	end
 end
 
--- Rainbow body
+-- Rainbow
 local rainbowConn
 local function setRainbowBody(enabled)
 	if enabled then
@@ -245,9 +232,7 @@ local function setRainbowBody(enabled)
 			if ch then
 				local hue = (tick() % 5) / 5
 				local col = Color3.fromHSV(hue, 0.8, 1)
-				for _,p in ipairs(ch:GetDescendants()) do
-					if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end
-				end
+				for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end end
 			end
 		end)
 	else
@@ -255,7 +240,7 @@ local function setRainbowBody(enabled)
 	end
 end
 
--- Anti-AFK
+-- Anti AFK
 local antiAfkConn
 local function setAntiAFK(enabled)
 	if enabled then
@@ -288,7 +273,7 @@ end
 local function doRejoin() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 local function doServerHop() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 
--- Fling
+-- Fling (touch/click)
 local flingPart
 local function createFlingPart()
 	if flingPart and flingPart.Parent then return end
@@ -356,8 +341,8 @@ local function enableFlingMode(seconds)
 	end)
 end
 
--- ---------- UI BUILD (v1.3 fixes) ----------
--- Remove existing GUI if present
+-- ---------- UI BUILD (v1.3 final) ----------
+-- Remove existing
 local existing = playerGui:FindFirstChild(GUI_NAME)
 if existing then existing:Destroy() end
 
@@ -369,22 +354,10 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Enabled = true
 
 -- helpers
-local function makeUICorner(parent, radius) local u = Instance.new("UICorner"); u.CornerRadius = radius or UDim.new(0,10); u.Parent = parent; return u end
-local function makeShadow(parent, size)
-	local shadow = Instance.new("ImageLabel")
-	shadow.BackgroundTransparency = 1
-	shadow.Size = size or UDim2.new(1,20,1,20)
-	shadow.Position = UDim2.new(0,-10,0,-10)
-	shadow.Image = "rbxassetid://7072721485"
-	shadow.ScaleType = Enum.ScaleType.Slice
-	shadow.SliceCenter = Rect.new(10,10,118,118)
-	shadow.ZIndex = 1
-	shadow.Parent = parent
-	return shadow
-end
-local function Tween(obj, props, t, style, dir) t = t or 0.22; style = style or Enum.EasingStyle.Quad; dir = dir or Enum.EasingDirection.Out; local tw = TweenService:Create(obj, TweenInfo.new(t, style, dir), props); tw:Play(); return tw end
+local function makeUICorner(parent, radius) local u = Instance.new("UICorner"); u.CornerRadius = radius or UDim.new(0,12); u.Parent = parent; return u end
+local function Tween(obj, props, t, style, dir) t = t or 0.2; style = style or Enum.EasingStyle.Quad; dir = dir or Enum.EasingDirection.Out; local tw = TweenService:Create(obj, TweenInfo.new(t, style, dir), props); tw:Play(); return tw end
 
--- Main frame
+-- Main Frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = WINDOW_SIZE
@@ -394,9 +367,8 @@ mainFrame.BackgroundColor3 = Themes[Settings.theme].panel
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 makeUICorner(mainFrame, UDim.new(0,14))
-makeShadow(mainFrame, UDim2.new(1,24,1,24))
 
--- Top Title area (draggable)
+-- Title (draggable)
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1,0,0,56)
 titleBar.BackgroundTransparency = 1
@@ -409,13 +381,13 @@ titleLabel.BackgroundTransparency = 1
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 18
 titleLabel.TextColor3 = Themes[Settings.theme].accent
-titleLabel.Text = TITLE_TEXT
+titleLabel.Text = "🌐  " .. TITLE_TEXT
 titleLabel.TextXAlignment = Enum.TextXAlignment.Center
 titleLabel.Parent = titleBar
 
--- Top right controls
+-- Top-right controls
 local topControls = Instance.new("Frame")
-topControls.Size = UDim2.new(0.28, -12, 1, 0)
+topControls.Size = UDim2.new(0.3, -12, 1, 0)
 topControls.Position = UDim2.new(0.7, 6, 0, 0)
 topControls.BackgroundTransparency = 1
 topControls.Parent = titleBar
@@ -437,8 +409,8 @@ local function makeTopButton(symbol)
 	b.TextColor3 = Color3.fromRGB(230,230,230)
 	b.Parent = topControls
 	makeUICorner(b, UDim.new(0,8))
-	-- press animation
-	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = Themes[Settings.theme].panel:lerp(Themes[Settings.theme].accent, 0.6)}, 0.12) end)
+	-- hover animation
+	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = Themes[Settings.theme].panel:lerp(Themes[Settings.theme].accent, 0.5)}, 0.12) end)
 	b.MouseLeave:Connect(function() Tween(b, {BackgroundColor3 = Color3.fromRGB(36,36,38)}, 0.12) end)
 	return b
 end
@@ -446,7 +418,7 @@ end
 local minBtn = makeTopButton("—")
 local closeBtn = makeTopButton("✕")
 
--- Sidebar (tabs) - moved slightly up so tabs are higher
+-- Sidebar (tabs) higher so buttons visible
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0,160,1,-56)
 sidebar.Position = UDim2.new(0,0,0,56)
@@ -455,22 +427,16 @@ sidebar.BorderSizePixel = 0
 sidebar.Parent = mainFrame
 makeUICorner(sidebar, UDim.new(0,12))
 
-local sideTop = Instance.new("Frame"); sideTop.Size = UDim2.new(1,0,0,8); sideTop.BackgroundTransparency = 1; sideTop.Parent = sidebar
-
 local tabContainer = Instance.new("ScrollingFrame")
-tabContainer.Size = UDim2.new(1,0,0,120) -- limited height; tabs will be higher visually
+tabContainer.Size = UDim2.new(1,0,0,140)
 tabContainer.Position = UDim2.new(0,0,0,12)
-tabContainer.BackgroundTransparency = 1
-tabContainer.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
-tabContainer.ScrollBarThickness = 6
 tabContainer.CanvasSize = UDim2.new(0,0,0,0)
+tabContainer.BackgroundTransparency = 1
+tabContainer.ScrollBarThickness = 6
 tabContainer.Parent = sidebar
-local tabLayout = Instance.new("UIListLayout")
-tabLayout.Padding = UDim.new(0,6)
-tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-tabLayout.Parent = tabContainer
+local tabLayout = Instance.new("UIListLayout"); tabLayout.Padding = UDim.new(0,8); tabLayout.Parent = tabContainer; tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Content area: IMPORTANT -> use ScrollingFrame for vertical scroll
+-- Content area (full use) -> ScrollingFrame
 local content = Instance.new("ScrollingFrame")
 content.Name = "Content"
 content.Size = UDim2.new(1, -180, 1, -56)
@@ -478,31 +444,22 @@ content.Position = UDim2.new(0,180,0,56)
 content.BackgroundColor3 = Themes[Settings.theme].bg
 content.BorderSizePixel = 0
 content.ScrollBarThickness = 8
-content.CanvasSize = UDim2.new(0,0,0,0) -- updated dynamically
+content.CanvasSize = UDim2.new(0,0,0,0)
 content.Parent = mainFrame
 makeUICorner(content, UDim.new(0,12))
 
-local contentPadding = Instance.new("UIPadding")
-contentPadding.PaddingTop = UDim.new(0,12)
-contentPadding.PaddingLeft = UDim.new(0,12)
-contentPadding.Parent = content
+local contentPadding = Instance.new("UIPadding"); contentPadding.PaddingTop = UDim.new(0,12); contentPadding.PaddingLeft = UDim.new(0,12); contentPadding.Parent = content
+local contentLayout = Instance.new("UIListLayout"); contentLayout.SortOrder = Enum.SortOrder.LayoutOrder; contentLayout.Padding = UDim.new(0,10); contentLayout.Parent = content
 
-local contentLayout = Instance.new("UIListLayout")
-contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-contentLayout.Padding = UDim.new(0,10)
-contentLayout.Parent = content
-
--- adjust CanvasSize when content changes (scrolling works)
+-- update CanvasSize when content changes
 contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	content.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 12)
 end)
-
--- Tab container canvas size too
 tabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	tabContainer.CanvasSize = UDim2.new(0, 0, 0, tabLayout.AbsoluteContentSize.Y + 6)
+	tabContainer.CanvasSize = UDim2.new(0,0,0, tabLayout.AbsoluteContentSize.Y + 8)
 end)
 
--- helpers for theme
+-- Accent helpers
 local function getTheme(name) return Themes[name] or Themes.Ocean end
 local function getAccent() return getTheme(Settings.theme).accent end
 local function updateAccent(themeName)
@@ -511,12 +468,10 @@ local function updateAccent(themeName)
 	mainFrame.BackgroundColor3 = t.panel
 	content.BackgroundColor3 = t.bg
 	sidebar.BackgroundColor3 = t.panel
-	-- update dynamic fills & texts
 	for _,f in ipairs(content:GetDescendants()) do
 		if f.Name == "__accent_fill" and f:IsA("Frame") then f.BackgroundColor3 = t.accent end
 		if f.Name == "__accent_text" and f:IsA("TextLabel") then f.TextColor3 = t.text end
 	end
-	-- update minimizer color if exists
 	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
 	if mg then
 		local btn = mg:FindFirstChildWhichIsA("ImageButton", true)
@@ -524,7 +479,7 @@ local function updateAccent(themeName)
 	end
 end
 
--- UI Primitives (label, button, toggle, slider, dropdown, keybind)
+-- UI primitives
 local function makeLabel(text)
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, -24, 0, 20)
@@ -583,7 +538,7 @@ local function makeToggle(item)
 	return frame
 end
 
--- Slider with touch & mouse support. decimal=true => step 0.1
+-- Slider (decimal=true -> step 0.1)
 local function makeSlider(item)
 	local frame = Instance.new("Frame"); frame.Size = UDim2.new(1, -24, 0, 54); frame.BackgroundTransparency = 1; frame.Parent = content
 	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(0.6,0,0,18); lbl.Position = UDim2.new(0,0,0,0); lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13; lbl.Text = item.text or "Slider"; lbl.TextColor3 = getTheme(Settings.theme).text; lbl.Parent = frame
@@ -701,13 +656,18 @@ local function makeKeybind(item)
 	return frame
 end
 
--- ---------- Build tabs & content according to original table ----------
-local tabButtons = {}
+-- clear content helper
+local function clearContent()
+	for _,c in ipairs(content:GetChildren()) do
+		if not (c:IsA("UIListLayout") or c:IsA("UIPadding")) then c:Destroy() end
+	end
+end
 
+-- ---------- Tabs & content (exactly your table) ----------
+local tabButtons = {}
 local function createTabButton(name, order)
 	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(0.9, 0, 0, 34)
-	b.AnchorPoint = Vector2.new(0,0)
+	b.Size = UDim2.new(0.9, 0, 0, 36)
 	b.Position = UDim2.new(0.05, 0, 0, 0)
 	b.BackgroundColor3 = Color3.fromRGB(36,36,38)
 	b.Font = Enum.Font.GothamSemibold
@@ -717,6 +677,8 @@ local function createTabButton(name, order)
 	b.LayoutOrder = order
 	b.Parent = tabContainer
 	makeUICorner(b, UDim.new(0,10))
+	Tween(b, {BackgroundTransparency = 0}, 0.01)
+	table.insert(tabButtons, b)
 	return b
 end
 
@@ -724,10 +686,12 @@ local function createTabButtonsAndContent(defs)
 	for idx, def in ipairs(defs) do
 		local btn = createTabButton(def.name, idx)
 		btn.MouseButton1Click:Connect(function()
+			-- deselect
 			for _,tb in ipairs(tabButtons) do tb.BackgroundColor3 = Color3.fromRGB(36,36,38) end
+			-- select
 			btn.BackgroundColor3 = getTheme(Settings.theme).panel:lerp(getAccent(), 0.25)
+			-- fill content
 			clearContent()
-			-- build content items
 			for _, item in ipairs(def.content or {}) do
 				if item.type == "label" then makeLabel(item.text)
 				elseif item.type == "button" then makeButton(item.text, item.action)
@@ -738,13 +702,12 @@ local function createTabButtonsAndContent(defs)
 				end
 			end
 
-			-- special: if tab is Funny, add player dropdown + Fake Kick button UI (makes it usable)
+			-- special: Funny -> player dropdown + Fake Kick button
 			if def.name == "Funny" then
 				-- players dropdown
 				local pframe = Instance.new("Frame"); pframe.Size = UDim2.new(1,-24,0,36); pframe.BackgroundTransparency = 1; pframe.Parent = content
 				local plbl = Instance.new("TextLabel"); plbl.Size = UDim2.new(0.5,0,1,0); plbl.BackgroundTransparency = 1; plbl.Font = Enum.Font.Gotham; plbl.TextSize = 14; plbl.Text = "Select Player"; plbl.TextColor3 = getTheme(Settings.theme).text; plbl.TextXAlignment = Enum.TextXAlignment.Left; plbl.Parent = pframe
 				local dd = Instance.new("TextButton"); dd.Size = UDim2.new(0,200,0,28); dd.Position = UDim2.new(1,-12,0.5,-14); dd.AnchorPoint = Vector2.new(1,0.5); dd.Text = "Choose"; dd.Font = Enum.Font.GothamSemibold; dd.TextSize = 13; dd.BackgroundColor3 = Color3.fromRGB(50,50,50); dd.TextColor3 = getTheme(Settings.theme).text; dd.Parent = pframe; makeUICorner(dd, UDim.new(0,8))
-				-- populate list
 				local playersList = {}
 				for _,pl in ipairs(Players:GetPlayers()) do if pl ~= player then table.insert(playersList, pl.Name) end end
 				local selIndex = 1
@@ -756,19 +719,16 @@ local function createTabButtonsAndContent(defs)
 					dd.Text = playersList[selIndex]
 				end)
 				-- Fake Kick button
-				local fk = makeButton("Fake Kick Player", function()
+				makeButton("Fake Kick Player", function()
 					if dd.Text == "No players" then pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="No players to target", Duration=2}) end); return end
-					-- fake message to user (cannot actually kick others client-side)
 					pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Fake kicked "..tostring(dd.Text), Duration=2}) end)
 				end)
 			end
-
 		end)
-		table.insert(tabButtons, btn)
 	end
 end
 
--- Build UI definitions (exactly your table)
+-- UI definitions (from your table)
 local uiDefinitions = {
 	{ name = "Info", content = {
 		{ type="label", text = "Credits:" },
@@ -829,19 +789,19 @@ local uiDefinitions = {
 -- create tabs
 createTabButtonsAndContent(uiDefinitions)
 
--- select first tab (Info)
+-- select first tab
 if tabButtons[1] then
 	tabButtons[1].BackgroundColor3 = getTheme(Settings.theme).panel:lerp(getAccent(), 0.25)
 	tabButtons[1].MouseButton1Click:Fire()
 end
 
--- apply accent & transparency initially
+-- apply initial visuals
 updateAccent(Settings.theme or Defaults.theme)
 mainFrame.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
 content.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
 sidebar.BackgroundTransparency = tonumber(Settings.ui_transparency) or 0
 
--- apply feature states
+-- apply persisted features
 if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
 if Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
 setNoClip(Settings.noclip)
@@ -851,37 +811,37 @@ setRainbowBody(Settings.rainbow_body)
 setSpin(Settings.spin_on, Settings.spin_speed)
 setAntiAFK(Settings.anti_afk)
 
--- bind close/minimize correctly and make minimizer remember position
+-- Minimizer logic (🌐 icon) - remembers position
 local minimizerGui = nil
 local minimizerBtn = nil
 
-local function createMinimizerCircle()
+local function createMinimizer()
 	if minimizerGui and minimizerGui.Parent then return end
 	minimizerGui = Instance.new("ScreenGui"); minimizerGui.Name = GUI_NAME.."_MIN"; minimizerGui.ResetOnSpawn = false; minimizerGui.Parent = playerGui; minimizerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	minimizerBtn = Instance.new("ImageButton")
-	minimizerBtn.Size = UDim2.new(0,48,0,48)
-	-- position from saved settings
+	minimizerBtn.Size = UDim2.new(0,54,0,54)
+	-- read position (absolute offsets)
 	local pos = Settings.minimizer_pos or Defaults.minimizer_pos
-	minimizerBtn.Position = UDim2.new(0, pos.x or 12, 0, pos.y or 20)
+	minimizerBtn.Position = UDim2.new(0, pos.x or 12, 0, pos.y or 24)
 	minimizerBtn.BackgroundColor3 = getAccent()
 	minimizerBtn.BorderSizePixel = 0
 	minimizerBtn.Image = ""
 	minimizerBtn.Parent = minimizerGui
-	makeUICorner(minimizerBtn, UDim.new(0,14))
-	local inner = Instance.new("TextLabel"); inner.Size = UDim2.new(1,0,1,0); inner.BackgroundTransparency = 1; inner.Text = "Cr"; inner.Font = Enum.Font.GothamBold; inner.TextSize = 16; inner.TextColor3 = Color3.fromRGB(20,20,20); inner.Parent = minimizerBtn
+	makeUICorner(minimizerBtn, UDim.new(0,16))
+	local inner = Instance.new("TextLabel"); inner.Size = UDim2.new(1,0,1,0); inner.BackgroundTransparency = 1; inner.Text = "🌐"; inner.Font = Enum.Font.GothamBold; inner.TextSize = 24; inner.TextColor3 = Color3.fromRGB(20,20,20); inner.Parent = minimizerBtn
 
-	-- draggable and remember final position on release
+	-- draggable and remember
 	local dragging = false
 	local dragInput, dragStart, startPos
 	minimizerBtn.InputBegan:Connect(function(input)
-		if (input.UserInputType == Enum.UserInputType.MouseButton1) or (input.UserInputType == Enum.UserInputType.Touch) then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragStart = input.Position
 			startPos = minimizerBtn.Position
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
-					-- remember position
+					-- remember absolute pos
 					local abs = minimizerBtn.AbsolutePosition
 					Settings.minimizer_pos = { x = abs.X, y = abs.Y }
 					if Settings.save_settings then saveSettings() end
@@ -900,7 +860,6 @@ local function createMinimizerCircle()
 	end)
 
 	minimizerBtn.MouseButton1Click:Connect(function()
-		-- restore UI
 		if screenGui and screenGui.Parent then
 			screenGui.Enabled = true
 			if minimizerGui and minimizerGui.Parent then minimizerGui:Destroy(); minimizerGui = nil end
@@ -909,29 +868,26 @@ local function createMinimizerCircle()
 end
 
 local function hideMainGui()
-	-- store current minimizer position will be updated on drag release
 	screenGui.Enabled = false
-	createMinimizerCircle()
+	createMinimizer()
 end
-
 local function showMainGui()
 	screenGui.Enabled = true
 	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
 	if mg then mg:Destroy() end
 end
 
--- Minimize / Close wiring
+-- wire buttons
 minBtn.MouseButton1Click:Connect(function()
 	hideMainGui()
 end)
 closeBtn.MouseButton1Click:Connect(function()
-	-- fully destroy GUI and minimizer
 	if screenGui and screenGui.Parent then screenGui:Destroy() end
 	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
 	if mg then mg:Destroy() end
 end)
 
--- Keybind toggle behavior
+-- toggle keybind
 local function getToggleKey()
 	local k = Settings.toggle_key or "RightControl"
 	for _,ek in ipairs(Enum.KeyCode:GetEnumItems()) do if ek.Name == tostring(k) then return ek end end
@@ -944,7 +900,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		if screenGui.Enabled then hideMainGui() else showMainGui() end
 	end
 end)
-
 spawn(function()
 	while true do
 		local newt = getToggleKey()
@@ -953,7 +908,7 @@ spawn(function()
 	end
 end)
 
--- Draggable mainFrame (PC & mobile) - drag from titleBar only
+-- draggable mainFrame from titleBar (PC + mobile)
 do
 	local dragging = false
 	local dragInput, dragStart, startPos
@@ -963,9 +918,7 @@ do
 			dragStart = input.Position
 			startPos = mainFrame.Position
 			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
+				if input.UserInputState == Enum.UserInputState.End then dragging = false end
 			end)
 		end
 	end)
@@ -980,7 +933,7 @@ do
 	end)
 end
 
--- CharacterAdded reapply
+-- apply on character respawn
 player.CharacterAdded:Connect(function()
 	task.wait(0.6)
 	if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
@@ -992,13 +945,13 @@ player.CharacterAdded:Connect(function()
 	if Settings.spin_on then setSpin(true, Settings.spin_speed) end
 end)
 
--- Entrance animation
+-- entrance anim + accent
 mainFrame.Position = UDim2.new(0.5, 0, -0.6, 0)
 Tween(mainFrame, {Position = UDim2.new(0.5, 0, 0.48, 0)}, 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 updateAccent(Settings.theme or Defaults.theme)
 pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = HUB_NAME.." "..VERSION.." loaded", Duration = 2}) end)
 
--- Ensure settings saved on close
+-- save on close
 game:BindToClose(function() if Settings.save_settings then saveSettings() end end)
 
--- End of LocalScript (v1.3)
+-- End of LocalScript (Criptix Hub | v1.3)
