@@ -1,11 +1,10 @@
 -- LocalScript -> StarterGui
--- Criptix Hub | v1.3.2 (WindUI Sync Fix)
--- Remote WindUI load + robust wait + loading indicator + full Criptix Hub
+-- Criptix Hub | v1.3.3 (WindUI Full Sync Fix)
+-- Remote WindUI load + persistent loading message + robust wait until tabs fully rendered
 
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TeleportService = game:GetService("TeleportService")
 local StarterGui = game:GetService("StarterGui")
@@ -17,12 +16,12 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- CONFIG
 local HUB_NAME = "Criptix Hub"
-local VERSION = "v1.3.2"
+local VERSION = "v1.3.3"
 local TITLE = HUB_NAME .. " | " .. VERSION .. " 🌐"
 local WINDUI_URL = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
 
 -- Persistence
-local SETTINGS_FILE = "CriptixHub_v1_3_2_windui.json"
+local SETTINGS_FILE = "CriptixHub_v1_3_3_windui.json"
 local hasFileApi = (type(writefile) == "function") and (type(readfile) == "function") and (type(isfile) == "function")
 
 local Defaults = {
@@ -280,17 +279,16 @@ local function doFlingOn(targetModel)
     flingPart = nil
 end
 
--- ---------- Load WindUI (remote) with loading indicator and robust wait ----------
+-- ---------- Load WindUI (remote) with persistent loading message + robust wait ----------
 local function tryLoadWindUI(url, timeout)
     timeout = timeout or 8
-    local start = tick()
     local ok, ui = pcall(function()
         return loadstring(game:HttpGet(url, true))()
     end)
     if not ok or type(ui) ~= "table" then
         return false, nil, "Failed to load WindUI from remote"
     end
-    -- wait for some of ui internals (best-effort)
+    -- wait a short time for internals
     local waited = 0
     while waited < timeout do
         if type(ui) == "table" and (ui.CreateWindow or ui.Notify or ui.SetTheme) then
@@ -298,30 +296,30 @@ local function tryLoadWindUI(url, timeout)
         end
         task.wait(0.08); waited = waited + 0.08
     end
-    return true, ui, nil -- still return ui even if internals are slow; we'll check win readiness later
+    return true, ui, nil -- return ui even if slow; further checks later
 end
 
--- show loading persistent notification (we will remove later)
-local loadingNotifyId = nil
-local function showLoading(msg)
-    pcall(function()
-        loadingNotifyId = HUB_NAME .. "_loading"
-        StarterGui:SetCore("SendNotification", {Title = HUB_NAME, Text = msg or "Loading WindUI...", Duration = 9999})
-    end)
+-- Persistent loading notification (we overwrite later)
+local loading_notification_sent = false
+local function showPersistentLoading(msg)
+    loading_notification_sent = true
+    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = msg or "Please wait...", Duration = 9999}) end)
 end
-local function hideLoading()
-    -- There's no built-in way to remove SetCore notification early in all runtimes.
-    -- We'll send a short notification to overwrite it.
-    pcall(function() StarterGui:SetCore("SendNotification", {Title = HUB_NAME, Text = " ", Duration = 0.1}) end)
+local function hidePersistentLoading()
+    if loading_notification_sent then
+        -- overwrite with a short blank to effectively remove
+        pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = " ", Duration = 0.1}) end)
+        loading_notification_sent = false
+    end
 end
 
-showLoading("Cargando WindUI...")
+showPersistentLoading("Please wait, Criptix Hub is loading...")
 
-local ok, ui, terr = tryLoadWindUI(WINDUI_URL, 8)
+local ok, ui, terr = tryLoadWindUI(WINDUI_URL, 10)
 if not ok or type(ui) ~= "table" then
-    hideLoading()
+    hidePersistentLoading()
     warn("[CriptixHub] WindUI load error:", terr)
-    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Error: no se pudo cargar WindUI", Duration = 6}) end)
+    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Error: could not load WindUI", Duration = 6}) end)
     return
 end
 
@@ -349,45 +347,64 @@ local ok2, err2 = pcall(function()
     })
 end)
 if not ok2 then
-    hideLoading()
+    hidePersistentLoading()
     warn("[CriptixHub] Failed to CreateWindow:", err2)
-    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Error al crear la ventana WindUI", Duration = 6}) end)
+    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Error creating WindUI window", Duration = 6}) end)
     return
 end
 
--- Wait until window reports methods available or has UI elements
-local function waitForWindowReady(winObj, timeout)
-    timeout = timeout or 4
+-- Wait until windui window GUI actually exists in PlayerGui and has child elements (full render)
+local function waitForWindUIRender(winObj, maxWait)
+    maxWait = maxWait or 6
     local t0 = tick()
-    while tick() - t0 < timeout do
+    -- First prefer winObj API readiness
+    while tick() - t0 < maxWait do
         if type(winObj) == "table" and winObj.Tab and winObj.EditOpenButton then
-            return true
+            -- additionally check underlying GUI instance (if available)
+            if winObj._Window and winObj._Window:IsA("Instance") then
+                if #winObj._Window:GetDescendants() > 6 then return true end
+            else
+                return true
+            end
         end
         task.wait(0.06)
     end
-    -- fallback: check if the underlying GUI has been parented to PlayerGui
-    local foundGui = false
-    if type(winObj) == "table" and winObj._Window then
-        local wgui = winObj._Window
-        if wgui and wgui:IsA("Instance") and wgui.Parent then foundGui = true end
+    -- fallback: try to detect a ScreenGui created by WindUI in PlayerGui (folder name or presence)
+    local found = false
+    local retryT0 = tick()
+    while tick() - retryT0 < 3 do
+        for _,g in ipairs(playerGui:GetChildren()) do
+            if g:IsA("ScreenGui") and (string.find(g.Name, "WindUI") or string.find(g.Name, "CriptixHub") or #g:GetDescendants() > 10) then
+                found = true
+                break
+            end
+        end
+        if found then return true end
+        task.wait(0.08)
     end
-    if foundGui then return true end
     return false
 end
 
-local ready = waitForWindowReady(win, 5)
-if not ready then
-    -- final attempt: small delay and continue
+local rendered = waitForWindUIRender(win, 8)
+if not rendered then
+    -- last fallback retry: small delay and another try
     task.wait(0.25)
+    rendered = waitForWindUIRender(win, 4)
 end
 
--- Remove loading
-hideLoading()
--- show loaded notify
+-- If still not rendered, we still continue but show a warning (this should be rare)
+if not rendered then
+    warn("[CriptixHub] Warning: WindUI may not have finished rendering its internal GUI. Proceeding anyway.")
+end
+
+-- Now safe to remove loading
+hidePersistentLoading()
+
+-- Notify loaded
 if ui and ui.Notify then
-    ui:Notify({Title = HUB_NAME, Description = VERSION .. " cargado correctamente", Duration = 2})
+    ui:Notify({Title = HUB_NAME, Description = VERSION .. " loaded successfully", Duration = 2})
 else
-    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = VERSION .. " cargado correctamente", Duration = 2}) end)
+    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = VERSION .. " loaded successfully", Duration = 2}) end)
 end
 
 -- Edit open button
@@ -397,10 +414,9 @@ if win and win.EditOpenButton then
     end)
 end
 
--- ---------- Build tabs and UI content (only after windui ready) ----------
+-- ---------- Create tabs + populate (safe now) ----------
 local function clampNum(n,a,b) return math.clamp(tonumber(n) or 0, a, b) end
 
--- Defensive creation: try/catch and fallback retry
 local Tabs = {}
 local function createTabs()
     Tabs.Main = win:Tab({Title = "Main", Icon = "house"})
@@ -411,13 +427,14 @@ local function createTabs()
     Tabs.SettingsUI = win:Tab({Title = "Settings UI", Icon = "paint"})
 end
 
-local okc, errc = pcall(createTabs)
-if not okc then
-    -- retry after short wait
+-- defensive create with retries
+local successCreate, createErr = pcall(createTabs)
+if not successCreate then
     task.wait(0.12)
     local okr, errr = pcall(createTabs)
     if not okr then
-        warn("[CriptixHub] Could not create WindUI Tabs:", errr)
+        hidePersistentLoading()
+        warn("[CriptixHub] Failed to create tabs:", errr)
         if ui and ui.Notify then ui:Notify({Title=HUB_NAME, Description="Error creating UI tabs", Duration=4}) end
         return
     end
@@ -696,9 +713,10 @@ game:BindToClose(function()
     if Settings.save_settings then pcall(function() saveSettings() end) end
 end)
 
--- Final ready notify
+-- Final ready notify (and ensure loading hidden)
+hidePersistentLoading()
 if ui and ui.Notify then
-    ui:Notify({Title = HUB_NAME, Description = "Criptix Hub inicializado correctamente", Duration = 3})
+    ui:Notify({Title = HUB_NAME, Description = "Criptix Hub initialized successfully", Duration = 3})
 else
-    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Criptix Hub inicializado correctamente", Duration = 3}) end)
+    pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Criptix Hub initialized successfully", Duration = 3}) end)
 end
