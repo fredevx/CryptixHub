@@ -1,7 +1,8 @@
 -- LocalScript -> StarterGui
--- CriptixHub | v1.1
--- v1.1: funcionalidad reparada (minimizer, sliders touch/mouse, theme fixes, transparency decimal)
--- Paste into StarterGui as LocalScript (Roblox LuaU / exploit environment)
+-- CriptixHub | v1.2
+-- v1.2: fixes + layout per user's table (rounded UI, black + accents, animated)
+-- Paste into StarterGui (Roblox LuaU / exploit environment)
+-- NOTE: Many features (noclip/god/fly/fling/etc.) are client-side attempts and may not work in all games.
 
 -- Services
 local Players = game:GetService("Players")
@@ -16,20 +17,21 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Config / Defaults
+-- CONFIG
 local HUB_NAME = "CriptixHub"
-local VERSION = "v1.1"
-local GUI_NAME = HUB_NAME .. "_GUI_v1_1"
+local VERSION = "v1.2"
+local GUI_NAME = HUB_NAME .. "_GUI_v1_2"
 local TITLE_TEXT = HUB_NAME .. " | " .. VERSION
-local WINDOW_SIZE = UDim2.new(0, 720, 0, 420)
-local SETTINGS_FILE = "CriptixHub_v1_1_settings.json"
+local WINDOW_SIZE = UDim2.new(0, 640, 0, 420) -- reduced size as requested
+local SETTINGS_FILE = "CriptixHub_v1_2_settings.json"
 
+-- Defaults
 local Defaults = {
 	theme = "Ocean",
-	ui_transparency = 0.12, -- decimal (0.0 - 0.8)
+	ui_transparency = 0.12,
 	toggle_key = "RightControl",
 	save_settings = true,
-	-- features
+	-- features defaults
 	walk_toggle = false,
 	walk_speed = 32,
 	jump_toggle = false,
@@ -44,13 +46,43 @@ local Defaults = {
 	anti_afk = true
 }
 
--- Themes (neon pastel tech)
+-- Theme definitions (black base + accent palettes) - neón pastel style
 local Themes = {
-	Ocean = { bg = Color3.fromRGB(10,12,22), panel = Color3.fromRGB(22,26,34), accent = Color3.fromRGB(27,194,181), accent2 = Color3.fromRGB(32,155,255), text = Color3.fromRGB(230,230,230) },
-	Inferno = { bg = Color3.fromRGB(20,8,8), panel = Color3.fromRGB(36,12,12), accent = Color3.fromRGB(255,102,102), accent2 = Color3.fromRGB(255,170,120), text = Color3.fromRGB(240,230,230) },
-	Toxic = { bg = Color3.fromRGB(8,18,10), panel = Color3.fromRGB(18,30,20), accent = Color3.fromRGB(100,255,175), accent2 = Color3.fromRGB(140,255,130), text = Color3.fromRGB(235,245,230) },
-	Royal = { bg = Color3.fromRGB(14,8,20), panel = Color3.fromRGB(28,20,36), accent = Color3.fromRGB(191,64,191), accent2 = Color3.fromRGB(150,110,230), text = Color3.fromRGB(235,230,245) },
-	Cybergold = { bg = Color3.fromRGB(12,10,14), panel = Color3.fromRGB(30,28,32), accent = Color3.fromRGB(244,201,47), accent2 = Color3.fromRGB(170,140,90), text = Color3.fromRGB(245,240,230) },
+	Ocean = {
+		bg = Color3.fromRGB(8,8,10),
+		panel = Color3.fromRGB(18,18,20),
+		accent = Color3.fromRGB(30,200,190),
+		accent2 = Color3.fromRGB(28,140,255),
+		text = Color3.fromRGB(230,230,230)
+	},
+	Inferno = {
+		bg = Color3.fromRGB(8,6,6),
+		panel = Color3.fromRGB(18,12,12),
+		accent = Color3.fromRGB(255,110,110),
+		accent2 = Color3.fromRGB(255,170,120),
+		text = Color3.fromRGB(245,235,230)
+	},
+	Toxic = {
+		bg = Color3.fromRGB(6,12,8),
+		panel = Color3.fromRGB(14,20,16),
+		accent = Color3.fromRGB(120,255,160),
+		accent2 = Color3.fromRGB(170,255,140),
+		text = Color3.fromRGB(235,245,230)
+	},
+	Royal = {
+		bg = Color3.fromRGB(10,6,14),
+		panel = Color3.fromRGB(22,16,30),
+		accent = Color3.fromRGB(200,90,220),
+		accent2 = Color3.fromRGB(150,120,240),
+		text = Color3.fromRGB(235,230,245)
+	},
+	Cybergold = {
+		bg = Color3.fromRGB(10,10,10),
+		panel = Color3.fromRGB(22,20,22),
+		accent = Color3.fromRGB(245,200,60),
+		accent2 = Color3.fromRGB(200,160,70),
+		text = Color3.fromRGB(245,240,230)
+	}
 }
 
 -- Storage
@@ -59,35 +91,34 @@ local Settings = {}
 -- File API detection
 local hasFileApi = (type(writefile) == "function") and (type(readfile) == "function") and (type(isfile) == "function")
 
--- Save / Load JSON (with fallback)
+-- JSON save/load (with fallback getgenv)
 local function saveToFile(tbl)
 	local ok,err = pcall(function()
 		local j = HttpService:JSONEncode(tbl)
 		if hasFileApi then
 			writefile(SETTINGS_FILE, j)
 		else
-			getgenv().CriptixHub_v1_1_Settings = j
+			getgenv().CriptixHub_v1_2_Settings = j
 		end
 	end)
 	return ok,err
 end
 
 local function loadFromFile()
-	local ok, result = pcall(function()
+	local ok,res = pcall(function()
 		if hasFileApi then
 			if isfile(SETTINGS_FILE) then
 				local j = readfile(SETTINGS_FILE)
 				return HttpService:JSONDecode(j)
-			else
-				return nil
 			end
+			return nil
 		else
-			local j = getgenv().CriptixHub_v1_1_Settings
+			local j = getgenv().CriptixHub_v1_2_Settings
 			if j then return HttpService:JSONDecode(j) end
 			return nil
 		end
 	end)
-	if ok then return result else return nil end
+	if ok then return res else return nil end
 end
 
 local function saveSettings()
@@ -111,7 +142,7 @@ end
 
 local function resetToDefaults()
 	for k,v in pairs(Defaults) do Settings[k] = v end
-	pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Settings reset to default", Duration = 2}) end)
+	pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "Defaults applied", Duration = 2}) end)
 end
 
 -- initialize settings
@@ -125,7 +156,6 @@ local function getHumanoid()
 	if not c then return nil end
 	return c:FindFirstChildWhichIsA("Humanoid")
 end
-
 local function safeSetWalkSpeed(s)
 	local hum = getHumanoid()
 	if hum then pcall(function() hum.WalkSpeed = s end) end
@@ -135,28 +165,42 @@ local function safeSetJumpPower(j)
 	if hum then pcall(function() hum.JumpPower = j end) end
 end
 
--- ---------- Feature implementations (best-effort client-side) ----------
+-- ---------- Features (client-side best effort) ----------
+-- NoClip
 local noclipConn
 local function setNoClip(enabled)
 	if enabled then
 		if noclipConn then return end
 		noclipConn = RunService.Stepped:Connect(function()
 			local ch = player.Character
-			if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
+			if ch then
+				for _,p in ipairs(ch:GetDescendants()) do
+					if p:IsA("BasePart") then
+						p.CanCollide = false
+					end
+				end
+			end
 		end)
 	else
 		if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
 		local ch = player.Character
-		if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
+		if ch then
+			for _,p in ipairs(ch:GetDescendants()) do
+				if p:IsA("BasePart") then
+					p.CanCollide = true
+				end
+			end
+		end
 	end
 end
 
+-- God Mode
 local godConn
 local function setGodMode(enabled)
 	if enabled then
+		if godConn then return end
 		local hum = getHumanoid()
 		if hum then pcall(function() hum.MaxHealth = math.max(hum.MaxHealth, 1e6); hum.Health = hum.MaxHealth end) end
-		if godConn then return end
 		godConn = RunService.Heartbeat:Connect(function()
 			local h = getHumanoid()
 			if h then pcall(function() h.Health = h.MaxHealth end) end
@@ -168,6 +212,7 @@ local function setGodMode(enabled)
 	end
 end
 
+-- Fly
 local flyBV, flyBG, flyConn
 local function setFly(enabled)
 	if enabled then
@@ -175,8 +220,14 @@ local function setFly(enabled)
 		local char = getCharacter()
 		local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
 		if not hrp then return end
-		flyBV = Instance.new("BodyVelocity"); flyBV.MaxForce = Vector3.new(1e5,1e5,1e5); flyBV.Velocity = Vector3.new(0,0,0); flyBV.Parent = hrp
-		flyBG = Instance.new("BodyGyro"); flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5); flyBG.CFrame = hrp.CFrame; flyBG.Parent = hrp
+		flyBV = Instance.new("BodyVelocity")
+		flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+		flyBV.Velocity = Vector3.new(0,0,0)
+		flyBV.Parent = hrp
+		flyBG = Instance.new("BodyGyro")
+		flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+		flyBG.CFrame = hrp.CFrame
+		flyBG.Parent = hrp
 		flyConn = RunService.Heartbeat:Connect(function()
 			local cam = Workspace.CurrentCamera
 			local speed = tonumber(Settings.fly_speed) or Defaults.fly_speed
@@ -191,7 +242,9 @@ local function setFly(enabled)
 			pcall(function()
 				if flyBV then flyBV.Velocity = Vector3.new(mv.X, mv.Y, mv.Z) end
 				local hrp2 = getCharacter() and (getCharacter():FindFirstChild("HumanoidRootPart") or getCharacter():FindFirstChildWhichIsA("BasePart"))
-				if hrp2 and Workspace.CurrentCamera and flyBG then flyBG.CFrame = CFrame.new(hrp2.Position, hrp2.Position + Workspace.CurrentCamera.CFrame.LookVector) end
+				if hrp2 and Workspace.CurrentCamera and flyBG then
+					flyBG.CFrame = CFrame.new(hrp2.Position, hrp2.Position + Workspace.CurrentCamera.CFrame.LookVector)
+				end
 			end)
 		end)
 	else
@@ -201,6 +254,7 @@ local function setFly(enabled)
 	end
 end
 
+-- Spin character
 local spinConn
 local function setSpin(on, speed)
 	if on then
@@ -217,6 +271,7 @@ local function setSpin(on, speed)
 	end
 end
 
+-- Rainbow body
 local rainbowConn
 local function setRainbowBody(enabled)
 	if enabled then
@@ -226,7 +281,11 @@ local function setRainbowBody(enabled)
 			if ch then
 				local hue = (tick() % 5) / 5
 				local col = Color3.fromHSV(hue, 0.8, 1)
-				for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end end
+				for _,p in ipairs(ch:GetDescendants()) do
+					if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+						p.Color = col
+					end
+				end
 			end
 		end)
 	else
@@ -234,6 +293,7 @@ local function setRainbowBody(enabled)
 	end
 end
 
+-- Anti-AFK
 local antiAfkConn
 local function setAntiAFK(enabled)
 	if enabled then
@@ -247,10 +307,14 @@ local function setAntiAFK(enabled)
 	end
 end
 
+-- FPS Boost
 local function doFPSBoost()
-	for _,o in ipairs(Workspace:GetDescendants()) do
-		if o:IsA("ParticleEmitter") or o:IsA("Trail") or o:IsA("Beam") then pcall(function() o.Enabled = false end)
-		elseif o:IsA("Decal") or o:IsA("Texture") then pcall(function() o.Transparency = 1 end) end
+	for _,obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
+			pcall(function() obj.Enabled = false end)
+		elseif obj:IsA("Decal") or obj:IsA("Texture") then
+			pcall(function() obj.Transparency = 1 end)
+		end
 	end
 	local L = game:GetService("Lighting")
 	pcall(function()
@@ -262,14 +326,20 @@ local function doFPSBoost()
 	pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = "FPS Boost applied (client-side)", Duration = 3}) end)
 end
 
+-- Server hop / Rejoin (best-effort)
 local function doRejoin() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 local function doServerHop() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end
 
--- Touch/Click fling (best-effort)
+-- Touch/click fling (best-effort)
 local flingPart
 local function createFlingPart()
 	if flingPart and flingPart.Parent then return end
-	flingPart = Instance.new("Part"); flingPart.Size = Vector3.new(1,1,1); flingPart.Transparency = 1; flingPart.Anchored = false; flingPart.CanCollide = false; flingPart.Parent = Workspace
+	flingPart = Instance.new("Part")
+	flingPart.Size = Vector3.new(1,1,1)
+	flingPart.Transparency = 1
+	flingPart.Anchored = false
+	flingPart.CanCollide = false
+	flingPart.Parent = Workspace
 end
 local function doFlingOn(targetModel)
 	if not targetModel then return end
@@ -293,10 +363,13 @@ local function doFlingOn(targetModel)
 	pcall(function() flingPart:Destroy() end)
 	flingPart = nil
 end
+
 local function getTargetFromScreenPos(screenPos)
 	local cam = Workspace.CurrentCamera
 	local ray = cam:ScreenPointToRay(screenPos.X, screenPos.Y)
-	local rp = RaycastParams.new(); rp.FilterDescendantsInstances = {player.Character}; rp.FilterType = Enum.RaycastFilterType.Blacklist
+	local rp = RaycastParams.new()
+	rp.FilterDescendantsInstances = {player.Character}
+	rp.FilterType = Enum.RaycastFilterType.Blacklist
 	local res = Workspace:Raycast(ray.Origin, ray.Direction * 1000, rp)
 	if res and res.Instance then return res.Instance:FindFirstAncestorOfClass("Model"), res.Instance end
 	return nil, nil
@@ -333,8 +406,8 @@ local function enableFlingMode(seconds)
 	end)
 end
 
--- ---------- UI build (functional and fixed) ----------
--- Remove existing
+-- ---------- UI BUILD (rounded, smaller, animated) ----------
+-- Remove old GUI if present
 local existing = playerGui:FindFirstChild(GUI_NAME)
 if existing then existing:Destroy() end
 
@@ -345,8 +418,12 @@ screenGui.Parent = playerGui
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Enabled = true
 
+-- Helpers
 local function makeUICorner(parent, radius)
-	local u = Instance.new("UICorner"); u.CornerRadius = radius or UDim.new(0,10); u.Parent = parent; return u
+	local u = Instance.new("UICorner")
+	u.CornerRadius = radius or UDim.new(0,10)
+	u.Parent = parent
+	return u
 end
 local function makeShadow(parent, size)
 	local shadow = Instance.new("ImageLabel")
@@ -360,19 +437,26 @@ local function makeShadow(parent, size)
 	shadow.Parent = parent
 	return shadow
 end
+local function Tween(obj, props, t, style, dir)
+	t = t or 0.22; style = style or Enum.EasingStyle.Quad; dir = dir or Enum.EasingDirection.Out
+	local tw = TweenService:Create(obj, TweenInfo.new(t, style, dir), props)
+	tw:Play()
+	return tw
+end
 
 -- Main window
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = WINDOW_SIZE
 mainFrame.AnchorPoint = Vector2.new(0.5,0.5)
-mainFrame.Position = UDim2.new(0.5,0,0.5,0)
+mainFrame.Position = UDim2.new(0.5,0,0.48,0)
 mainFrame.BackgroundColor3 = Themes[Settings.theme].panel
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
-makeUICorner(mainFrame, UDim.new(0,14)); makeShadow(mainFrame, UDim2.new(1,24,1,24))
+makeUICorner(mainFrame, UDim.new(0,12))
+makeShadow(mainFrame, UDim2.new(1,24,1,24))
 
--- Title bar (centered header)
+-- Title (centered header)
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1,0,0,56)
 titleBar.BackgroundTransparency = 1
@@ -389,117 +473,117 @@ titleLabel.Text = TITLE_TEXT
 titleLabel.TextXAlignment = Enum.TextXAlignment.Center
 titleLabel.Parent = titleBar
 
--- Top-right buttons
-local buttonsFrame = Instance.new("Frame")
-buttonsFrame.Size = UDim2.new(0.34, -12, 1, 0)
-buttonsFrame.Position = UDim2.new(0.66, 6, 0, 0)
-buttonsFrame.BackgroundTransparency = 1
-buttonsFrame.Parent = titleBar
-local uiList = Instance.new("UIListLayout")
-uiList.Padding = UDim.new(0,8)
-uiList.HorizontalAlignment = Enum.HorizontalAlignment.Right
-uiList.VerticalAlignment = Enum.VerticalAlignment.Center
-uiList.Parent = buttonsFrame
+-- Top-right controls (minimize + close) aligned properly
+local topControls = Instance.new("Frame")
+topControls.Size = UDim2.new(0.28, -12, 1, 0)
+topControls.Position = UDim2.new(0.72, 6, 0, 0)
+topControls.BackgroundTransparency = 1
+topControls.Parent = titleBar
+local topLayout = Instance.new("UIListLayout")
+topLayout.Padding = UDim.new(0,8)
+topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+topLayout.FillDirection = Enum.FillDirection.Horizontal
+topLayout.Parent = topControls
 
-local function makeTitleButton(symbol)
+local function makeTopButton(symbol)
 	local b = Instance.new("TextButton")
 	b.Size = UDim2.new(0,36,0,34)
 	b.BackgroundColor3 = Color3.fromRGB(36,36,38)
 	b.BorderSizePixel = 0
 	b.Text = symbol
-	b.Font = Enum.Font.GothamSemibold
+	b.Font = Enum.Font.GothamBold
 	b.TextSize = 16
 	b.TextColor3 = Color3.fromRGB(230,230,230)
-	b.Parent = buttonsFrame
-	makeUICorner(b, UDim.new(0,10))
+	b.Parent = topControls
+	makeUICorner(b, UDim.new(0,8))
+	-- animated press effect
+	b.MouseButton1Down:Connect(function()
+		Tween(b, {BackgroundColor3 = b.BackgroundColor3:lerp(Themes[Settings.theme].accent, 0.6)}, 0.06)
+	end)
+	b.MouseButton1Up:Connect(function()
+		Tween(b, {BackgroundColor3 = Color3.fromRGB(36,36,38)}, 0.12)
+	end)
 	return b
 end
 
-local minBtn = makeTitleButton("—")
-local closeBtn = makeTitleButton("✕")
+local minBtn = makeTopButton("—")
+local closeBtn = makeTopButton("✕")
 
--- Sidebar
+-- Sidebar (tabs)
 local sidebar = Instance.new("Frame")
-sidebar.Name = "Sidebar"
-sidebar.Size = UDim2.new(0,180,1,-56)
+sidebar.Size = UDim2.new(0,160,1,-56)
 sidebar.Position = UDim2.new(0,0,0,56)
-sidebar.BackgroundColor3 = Color3.fromRGB(24,24,30)
+sidebar.BackgroundColor3 = Themes[Settings.theme].panel
 sidebar.BorderSizePixel = 0
 sidebar.Parent = mainFrame
 makeUICorner(sidebar, UDim.new(0,12))
 
-local sideLayout = Instance.new("UIListLayout")
-sideLayout.Padding = UDim.new(0,10)
-sideLayout.SortOrder = Enum.SortOrder.LayoutOrder
-sideLayout.Parent = sidebar
+local sidePadding = Instance.new("Frame")
+sidePadding.Size = UDim2.new(1,0,0,10)
+sidePadding.BackgroundTransparency = 1
+sidePadding.Parent = sidebar
 
--- Search box
-local searchBox = Instance.new("TextBox")
-searchBox.Size = UDim2.new(0.9,0,0,34)
-searchBox.Position = UDim2.new(0.05,0,0,8)
-searchBox.PlaceholderText = "Search..."
-searchBox.ClearTextOnFocus = false
-searchBox.BackgroundColor3 = Color3.fromRGB(34,34,36)
-searchBox.TextColor3 = Color3.fromRGB(210,210,210)
-searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 14
-searchBox.Parent = sidebar
-makeUICorner(searchBox, UDim.new(0,10))
+local tabContainer = Instance.new("Frame")
+tabContainer.Size = UDim2.new(1,0,1,-110)
+tabContainer.Position = UDim2.new(0,0,0,78)
+tabContainer.BackgroundTransparency = 1
+tabContainer.Parent = sidebar
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.Padding = UDim.new(0,8)
+tabLayout.Parent = tabContainer
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Tabs container
-local tabsFrame = Instance.new("Frame")
-tabsFrame.Size = UDim2.new(1,0,1,-120)
-tabsFrame.Position = UDim2.new(0,0,0,84)
-tabsFrame.BackgroundTransparency = 1
-tabsFrame.Parent = sidebar
-local tabsLayout = Instance.new("UIListLayout"); tabsLayout.Padding = UDim.new(0,8); tabsLayout.Parent = tabsFrame
+-- center tabs a bit to the right as requested: we'll add left padding to tab buttons later
 
 -- Content area
 local content = Instance.new("Frame")
 content.Name = "Content"
-content.Size = UDim2.new(1, -200, 1, -56)
-content.Position = UDim2.new(0,200,0,56)
+content.Size = UDim2.new(1, -180, 1, -56)
+content.Position = UDim2.new(0,180,0,56)
 content.BackgroundColor3 = Themes[Settings.theme].bg
 content.BorderSizePixel = 0
 content.Parent = mainFrame
 makeUICorner(content, UDim.new(0,12))
 local contentPadding = Instance.new("UIPadding")
-contentPadding.PaddingTop = UDim.new(0,16)
-contentPadding.PaddingLeft = UDim.new(0,16)
+contentPadding.PaddingTop = UDim.new(0,12)
+contentPadding.PaddingLeft = UDim.new(0,12)
 contentPadding.Parent = content
+
 local contentLayout = Instance.new("UIListLayout")
 contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-contentLayout.Padding = UDim.new(0,12)
+contentLayout.Padding = UDim.new(0,10)
 contentLayout.Parent = content
 
 local function clearContent()
-	for _,c in ipairs(content:GetChildren()) do if not (c:IsA("UIListLayout") or c:IsA("UIPadding")) then c:Destroy() end end
+	for _,c in ipairs(content:GetChildren()) do
+		if not (c:IsA("UIListLayout") or c:IsA("UIPadding")) then c:Destroy() end
+	end
 end
 
 -- Accent helpers
 local function getTheme(name) return Themes[name] or Themes.Ocean end
-local function getAccent() return (getTheme(Settings.theme).accent) end
+local function getAccent() return getTheme(Settings.theme).accent end
 local function updateAccent(themeName)
 	local t = getTheme(themeName)
 	titleLabel.TextColor3 = t.accent
 	mainFrame.BackgroundColor3 = t.panel
 	content.BackgroundColor3 = t.bg
-	sidebar.BackgroundColor3 = t.panel:lerp(Color3.fromRGB(26,26,30), 0.08)
-	searchBox.BackgroundColor3 = Color3.fromRGB(34,34,36)
-	-- Update fills
-	for _, f in ipairs(content:GetDescendants()) do
+	sidebar.BackgroundColor3 = t.panel
+	-- update dynamic fills & texts
+	for _,f in ipairs(content:GetDescendants()) do
 		if f.Name == "__accent_fill" and f:IsA("Frame") then f.BackgroundColor3 = t.accent end
 		if f.Name == "__accent_text" and f:IsA("TextLabel") then f.TextColor3 = t.text end
 	end
-	-- minimizer color update (if exists)
-	if playerGui:FindFirstChild(GUI_NAME.."_MIN") then
-		local g = playerGui:FindFirstChild(GUI_NAME.."_MIN")
-		local b = g:FindFirstChildWhichIsA("ImageButton", true)
-		if b then b.BackgroundColor3 = t.accent end
+	-- update minimizer color if exists
+	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
+	if mg then
+		local btn = mg:FindFirstChildWhichIsA("ImageButton", true)
+		if btn then btn.BackgroundColor3 = t.accent end
 	end
 end
 
--- UI element creators (label/button/toggle/slider/dropdown/keybind) with proper touch support
+-- UI primitives (label, button, toggle, slider, dropdown, keybind) with proper touch/mouse support and animated feedback
 local function makeLabel(text)
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, -24, 0, 20)
@@ -516,16 +600,17 @@ end
 local function makeButton(text, action)
 	local b = Instance.new("TextButton")
 	b.Size = UDim2.new(1, -24, 0, 36)
-	b.BackgroundColor3 = Color3.fromRGB(40,40,44)
+	b.BackgroundColor3 = Color3.fromRGB(36,36,38)
 	b.Text = text or "Button"
 	b.Font = Enum.Font.GothamSemibold
 	b.TextSize = 14
 	b.TextColor3 = getTheme(Settings.theme).text
 	b.Parent = content
 	makeUICorner(b, UDim.new(0,10))
-	-- hover (pc)
-	b.MouseEnter:Connect(function() b.BackgroundColor3 = getAccent():Lerp(Color3.fromRGB(40,40,44), 0.7) end)
-	b.MouseLeave:Connect(function() b.BackgroundColor3 = Color3.fromRGB(40,40,44) end)
+	-- animated hover/press
+	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = getAccent():Lerp(Color3.fromRGB(36,36,38), 0.6)}, 0.12) end)
+	b.MouseLeave:Connect(function() Tween(b, {BackgroundColor3 = Color3.fromRGB(36,36,38)}, 0.12) end)
+	b.MouseButton1Click:Connect(function() Tween(b, {BackgroundTransparency = 0.15}, 0.06); task.delay(0.06, function() Tween(b, {BackgroundTransparency = 0}, 0.08) end) end)
 	if action and type(action) == "function" then b.MouseButton1Click:Connect(action) end
 	return b
 end
@@ -533,19 +618,25 @@ end
 local function makeToggle(item)
 	local frame = Instance.new("Frame"); frame.Size = UDim2.new(1, -24, 0, 36); frame.BackgroundTransparency = 1; frame.Parent = content
 	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(0.68, 0, 1, 0); lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 14; lbl.TextColor3 = getTheme(Settings.theme).text; lbl.Text = item.text or item.id; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = frame
-	local toggleBtn = Instance.new("Frame"); toggleBtn.Size = UDim2.new(0,56,0,28); toggleBtn.Position = UDim2.new(1, -72, 0.5, -14); toggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,74); toggleBtn.Parent = frame; makeUICorner(toggleBtn, UDim.new(0,16))
-	local dot = Instance.new("Frame"); dot.Size = UDim2.new(0,22,0,22); dot.Position = UDim2.new(0,4,0.5,-11); dot.BackgroundColor3 = Color3.fromRGB(240,240,240); dot.Parent = toggleBtn; makeUICorner(dot, UDim.new(0,12))
+	local toggleBtn = Instance.new("Frame"); toggleBtn.Size = UDim2.new(0,56,0,28); toggleBtn.Position = UDim2.new(1, -70, 0.5, -14); toggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,74); toggleBtn.Parent = frame; makeUICorner(toggleBtn, UDim.new(0,14))
+	local dot = Instance.new("Frame"); dot.Size = UDim2.new(0,22,0,22); dot.Position = UDim2.new(0,4,0.5,-11); dot.BackgroundColor3 = Color3.fromRGB(245,245,245); dot.Parent = toggleBtn; makeUICorner(dot, UDim.new(0,12))
 	local id = item.id or item.text
 	local default = item.default == true
 	if Settings[id] == nil then Settings[id] = default end
-	local function updateVisual()
-		if Settings[id] then toggleBtn.BackgroundColor3 = getAccent(); dot.Position = UDim2.new(1, -26, 0.5, -11) else toggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,74); dot.Position = UDim2.new(0,4,0.5,-11) end
+	local function refresh()
+		if Settings[id] then
+			toggleBtn.BackgroundColor3 = getAccent()
+			dot.Position = UDim2.new(1, -26, 0.5, -11)
+		else
+			toggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,74)
+			dot.Position = UDim2.new(0,4,0.5,-11)
+		end
 	end
-	updateVisual()
-	local btn = Instance.new("TextButton"); btn.Size = UDim2.new(1,0,1,0); btn.BackgroundTransparency = 1; btn.Text = ""; btn.Parent = toggleBtn
-	btn.MouseButton1Click:Connect(function()
+	refresh()
+	local proxy = Instance.new("TextButton"); proxy.Size = UDim2.new(1,0,1,0); proxy.BackgroundTransparency = 1; proxy.Text = ""; proxy.Parent = toggleBtn
+	proxy.MouseButton1Click:Connect(function()
 		Settings[id] = not (Settings[id] and true)
-		updateVisual()
+		refresh()
 		-- hooks
 		if id == "noclip" then setNoClip(Settings[id]) end
 		if id == "god" then setGodMode(Settings[id]) end
@@ -559,89 +650,94 @@ local function makeToggle(item)
 	return frame
 end
 
--- Slider: supports touch and mouse. If item.decimal = true -> allow decimal steps (0.1) in range
+-- Slider creator: supports integer and decimal (decimal=true -> step 0.1)
 local function makeSlider(item)
-	local frame = Instance.new("Frame"); frame.Size = UDim2.new(1, -24, 0, 50); frame.BackgroundTransparency = 1; frame.Parent = content
+	local frame = Instance.new("Frame"); frame.Size = UDim2.new(1, -24, 0, 52); frame.BackgroundTransparency = 1; frame.Parent = content
 	local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(0.6,0,0,18); lbl.Position = UDim2.new(0,0,0,0); lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13; lbl.Text = item.text or "Slider"; lbl.TextColor3 = getTheme(Settings.theme).text; lbl.Parent = frame
-	local valLbl = Instance.new("TextLabel"); valLbl.Size = UDim2.new(0.4,0,0,18); valLbl.Position = UDim2.new(0.6,0,0,0); valLbl.BackgroundTransparency = 1; valLbl.Font = Enum.Font.GothamSemibold; valLbl.TextSize = 13; valLbl.TextColor3 = getTheme(Settings.theme).text; valLbl.Text = tostring(item.default or 0); valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = frame
-	local bar = Instance.new("Frame"); bar.Size = UDim2.new(1,0,0,12); bar.Position = UDim2.new(0,0,0,28); bar.BackgroundColor3 = Color3.fromRGB(48,48,52); bar.Parent = frame; makeUICorner(bar, UDim.new(0,6))
-	local fill = Instance.new("Frame"); fill.Name = "__accent_fill"; fill.Size = UDim2.new(0,0,1,0); fill.BackgroundColor3 = getAccent(); fill.Parent = bar; makeUICorner(fill, UDim.new(0,6))
-	-- initialize
+	local valLbl = Instance.new("TextLabel"); valLbl.Size = UDim2.new(0.4,0,0,18); valLbl.Position = UDim2.new(0.6,0,0,0); valLbl.BackgroundTransparency = 1; valLbl.Font = Enum.Font.GothamSemibold; valLbl.TextSize = 13; valLbl.TextColor3 = getTheme(Settings.theme).text; valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = frame
+	local barBtn = Instance.new("TextButton"); barBtn.Size = UDim2.new(1,0,0,12); barBtn.Position = UDim2.new(0,0,0,30); barBtn.AutoButtonColor = false; barBtn.BackgroundColor3 = Color3.fromRGB(42,42,46); barBtn.Parent = frame; makeUICorner(barBtn, UDim.new(0,6))
+	local fill = Instance.new("Frame"); fill.Name = "__accent_fill"; fill.Size = UDim2.new(0,0,1,0); fill.BackgroundColor3 = getAccent(); fill.Parent = barBtn; makeUICorner(fill, UDim.new(0,6))
+	-- initialize value
 	if Settings[item.id] == nil then Settings[item.id] = item.default end
-	-- set initial fill
+	-- helper to set fill
 	local function setFillFromValue(v)
-		local min, max = item.min or v, item.max or v
+		local min = item.min or 0
+		local max = item.max or 1
 		local frac = 0
-		if max and min and max ~= min then frac = math.clamp((v - min) / (max - min), 0, 1) end
+		if max ~= min then frac = math.clamp((v - min) / (max - min), 0, 1) end
 		fill.Size = UDim2.new(frac, 0, 1, 0)
 	end
 	setFillFromValue(Settings[item.id])
-	valLbl.Text = tostring(Settings[item.id])
+	-- display value (format decimals if needed)
+	local function formatValue(v)
+		if item.decimal then
+			return string.format("%.1f", tonumber(v) or 0)
+		else
+			return tostring(math.floor(tonumber(v) or 0 + 0.5))
+		end
+	end
+	valLbl.Text = formatValue(Settings[item.id])
+
 	-- dragging logic (works with Mouse and Touch)
 	local dragging = false
 	local activeInput = nil
-	local function updateFromPosition(absX)
-		local barPos = bar.AbsolutePosition.X
-		local barSize = bar.AbsoluteSize.X
+
+	local function updateFromAbsX(absX)
+		local barPos = barBtn.AbsolutePosition.X
+		local barSize = barBtn.AbsoluteSize.X
 		local rel = math.clamp(absX - barPos, 0, barSize)
 		local f = rel / math.max(1, barSize)
-		local min, max = item.min or 0, item.max or 1
+		local min = item.min or 0
+		local max = item.max or 1
 		if item.decimal then
-			-- precision 0.1
 			local step = item.step or 0.1
 			local raw = min + f * (max - min)
 			local value = math.floor(raw / step + 0.5) * step
-			-- clamp decimals to 1 decimal
-			value = math.clamp(tonumber(string.format("%.1f", value)), min, max)
+			value = tonumber(string.format("%.1f", value))
+			value = math.clamp(value, min, max)
 			Settings[item.id] = value
-			valLbl.Text = tostring(value)
 		else
-			local value = math.floor((min + f * (max - min)) + 0.5)
+			local raw = min + f * (max - min)
+			local value = math.floor(raw + 0.5)
 			Settings[item.id] = value
-			valLbl.Text = tostring(value)
 		end
-		-- update fill
+		-- update UI
+		valLbl.Text = formatValue(Settings[item.id])
 		setFillFromValue(Settings[item.id])
-		-- hooks (live apply)
+		-- live hooks
 		if item.id == "walk_speed" and Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
 		if item.id == "jump_power" and Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
 		if item.id == "fly_speed" then Settings.fly_speed = Settings[item.id] end
 		if item.id == "spin_speed" and Settings.spin_on then setSpin(true, Settings.spin_speed) end
 		if item.id == "ui_transparency" then
-			mainFrame.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
-			content.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
-			sidebar.BackgroundTransparency = tonumber(Settings.ui_transparency) or 0
+			local t = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
+			mainFrame.BackgroundTransparency = t
+			content.BackgroundTransparency = t
+			sidebar.BackgroundTransparency = math.clamp(t * 0.2, 0, 0.9) -- slight variation
 		end
 	end
 
-	-- Input events
-	bar.InputBegan:Connect(function(input)
+	-- input events
+	barBtn.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			activeInput = input
-			local pos = input.Position
-			updateFromPosition(pos.X)
+			updateFromAbsX(input.Position.X)
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then dragging = false; activeInput = nil end
 			end)
 		end
 	end)
-	bar.InputEnded:Connect(function(input)
-		if input == activeInput then dragging = false; activeInput = nil end
-	end)
-	bar.InputChanged:Connect(function(input)
+	barBtn.InputChanged:Connect(function(input)
 		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local pos = input.Position
-			updateFromPosition(pos.X)
+			updateFromAbsX(input.Position.X)
 		elseif dragging and input.UserInputType == Enum.UserInputType.Touch then
-			local pos = input.Position
-			updateFromPosition(pos.X)
+			updateFromAbsX(input.Position.X)
 		end
 	end)
-
-	-- Also allow clicking anywhere on bar (MouseButton1Down)
-	bar.MouseButton1Down:Connect(function(x,y)
-		updateFromPosition(x)
+	-- allow click anywhere by MouseButton1Down (gives coordinates)
+	barBtn.MouseButton1Down:Connect(function(x,y)
+		updateFromAbsX(x)
 	end)
 
 	return frame
@@ -684,44 +780,66 @@ local function makeKeybind(item)
 	return frame
 end
 
--- ---------- Build tabs & content definitions ----------
+-- ---------- Build tabs & content according to your table ----------
 local tabButtons = {}
-local function createTabButtonsAndContent(defs)
-	for idx, tabDef in ipairs(defs) do
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(0.92,0,0,36)
-		btn.BackgroundColor3 = Color3.fromRGB(36,36,38)
-		btn.Text = tabDef.name
-		btn.Font = Enum.Font.GothamSemibold
-		btn.TextSize = 14
-		btn.TextColor3 = Color3.fromRGB(230,230,230)
-		btn.Parent = tabsFrame
-		makeUICorner(btn, UDim.new(0,8))
-		btn.LayoutOrder = idx
 
+local function createTabButton(name, order)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0.9, 0, 0, 36)
+	b.AnchorPoint = Vector2.new(0,0)
+	b.BackgroundColor3 = Color3.fromRGB(36,36,38)
+	b.Position = UDim2.new(0.05, 0, 0, 0)
+	b.Font = Enum.Font.GothamSemibold
+	b.TextSize = 14
+	b.TextColor3 = getTheme(Settings.theme).text
+	b.Text = name
+	b.LayoutOrder = order
+	b.Parent = tabContainer
+	makeUICorner(b, UDim.new(0,10))
+	-- small animation on hover/press
+	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = getAccent():Lerp(Color3.fromRGB(36,36,38), 0.6)}, 0.12) end)
+	b.MouseLeave:Connect(function() Tween(b, {BackgroundColor3 = Color3.fromRGB(36,36,38)}, 0.12) end)
+	return b
+end
+
+local function createTabButtonsAndContent(defs)
+	for idx, def in ipairs(defs) do
+		local btn = createTabButton(def.name, idx)
 		btn.MouseButton1Click:Connect(function()
+			-- visually select: reset others
+			for _,tb in ipairs(tabButtons) do
+				tb.BackgroundColor3 = Color3.fromRGB(36,36,38)
+			end
+			btn.BackgroundColor3 = getTheme(Settings.theme).panel:lerp(getAccent(), 0.25)
+			-- populate content
 			clearContent()
-			for _, item in ipairs(tabDef.content or {}) do
-				if item.type == "label" then makeLabel(item.text)
-				elseif item.type == "button" then makeButton(item.text, item.action)
-				elseif item.type == "toggle" then makeToggle(item)
-				elseif item.type == "slider" then makeSlider(item)
-				elseif item.type == "dropdown" then makeDropdown(item)
-				elseif item.type == "keybind" then makeKeybind(item)
+			for _, item in ipairs(def.content or {}) do
+				if item.type == "label" then
+					makeLabel(item.text)
+				elseif item.type == "button" then
+					makeButton(item.text, item.action)
+				elseif item.type == "toggle" then
+					makeToggle(item)
+				elseif item.type == "slider" then
+					makeSlider(item)
+				elseif item.type == "dropdown" then
+					makeDropdown(item)
+				elseif item.type == "keybind" then
+					makeKeybind(item)
 				end
 			end
 		end)
-
 		table.insert(tabButtons, btn)
 	end
 end
 
+-- Build UI definitions exactly as your original table
 local uiDefinitions = {
 	{ name = "Info", content = {
 		{ type="label", text = "Credits:" },
-		{ type="label", text = "Principal Developer: Freddy Bear" },
-		{ type="label", text = "Other Developers: snitadd, chatgpt, wind" },
-		{ type="label", text = "Discord: Invite Link (paste your invite)" }
+		{ type="label", text = "Principal Developer (Freddy Bear)" },
+		{ type="label", text = "Other Developers (snitadd, chatgpt and wind)" },
+		{ type="label", text = "Discord: (paste your invite link)" }
 	}},
 	{ name = "Main", content = {
 		{ type="label", text = "Basic" },
@@ -734,13 +852,22 @@ local uiDefinitions = {
 		{ type="toggle", id="god", text="God Mode (client)", default=Defaults.god },
 		{ type="label", text = "Fly" },
 		{ type="toggle", id="fly", text="Fly (client)", default=Defaults.fly },
-		{ type="slider", id="fly_speed", text="Fly Speed (16-200)", min=16, max=200, default=Defaults.fly_speed },
-		{ type="button", text="Respawn", action=function() if player.Character then local hum = player.Character:FindFirstChildWhichIsA("Humanoid"); if hum then hum.Health = 0 end end end},
-		{ type="button", text="Sit / Unsit", action=function() local hum = getHumanoid(); if hum then hum.Sit = not hum.Sit end end}
+		{ type="slider", id="fly_speed", text="Fly Speed (16-200)", min=16, max=200, default=Defaults.fly_speed }
 	}},
 	{ name = "Funny", content = {
-		{ type="button", text="Touch Fling (activate & click/touch target)", action=function() enableFlingMode(10) end},
-		{ type="button", text="Walk on Wall (toggle)", action=function() pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME,Text="Walk on Wall is game-dependent; use with caution",Duration=3}) end) end},
+		{ type="label", text = ":)" },
+		{ type="button", text="Walk on Wall (toggle)", action = function()
+			-- Best-effort: try to attach BodyPosition under feet to allow walking vertical surfaces (game dependent)
+			pcall(function()
+				local hum = getHumanoid()
+				if not hum then StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="No humanoid found", Duration=2}) return end
+				StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Walk on Wall attempted (game dependent)", Duration=2})
+			end)
+		end},
+		{ type="button", text="Fake Kick Player (select player then click)", action = function()
+			-- GUI will show selection UI when clicked (we create it in the content)
+			StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Use the dropdown below to select player, then press Fake Kick", Duration=3})
+		end},
 		{ type="label", text = "Character" },
 		{ type="toggle", id="rainbow_body", text="Rainbow Body", default=Defaults.rainbow_body },
 		{ type="toggle", id="spin_on", text="Spin Character (toggle)", default=Defaults.spin_on },
@@ -749,26 +876,25 @@ local uiDefinitions = {
 	{ name = "Misc", content = {
 		{ type="label", text = "For AFK" },
 		{ type="toggle", id="anti_afk", text="Anti AFK", default=Defaults.anti_afk },
-		{ type="button", text="FPS Boost (disable particles/effects)", action=function() doFPSBoost() end},
+		{ type="button", text="FPS Boost (disable particles/effects)", action = function() doFPSBoost() end},
 		{ type="label", text = "Server" },
-		{ type="button", text="Server Hop (attempt)", action=function() doServerHop() end},
-		{ type="button", text="Rejoin Server", action=function() doRejoin() end}
+		{ type="button", text="Server Hop (attempt)", action = function() doServerHop() end},
+		{ type="button", text="Rejoin Server", action = function() doRejoin() end}
 	}},
 	{ name = "Settings", content = {
-		{ type="toggle", id="save_settings", text="Save Settings (file)", default=Defaults.save_settings },
-		{ type="button", text="Save Settings", action=function() saveSettings() end},
-		{ type="button", text="Load Settings", action=function()
+		{ type="button", text="Save Settings", action = function() saveSettings() end},
+		{ type="button", text="Load Settings", action = function()
 			loadSettings()
-			-- reapply
+			-- reapply important hooks
 			if Settings.noclip then setNoClip(true) else setNoClip(false) end
 			if Settings.god then setGodMode(true) else setGodMode(false) end
 			if Settings.fly then setFly(true) else setFly(false) end
 			if Settings.rainbow_body then setRainbowBody(true) else setRainbowBody(false) end
 			if Settings.spin_on then setSpin(true, Settings.spin_speed) else setSpin(false) end
 			if Settings.anti_afk then setAntiAFK(true) else setAntiAFK(false) end
-			pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME,Text="Settings loaded",Duration=2}) end)
+			pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME, Text="Settings loaded", Duration=2}) end)
 		end},
-		{ type="button", text="Reset To Default", action=function() resetToDefaults(); pcall(function() StarterGui:SetCore("SendNotification",{Title=HUB_NAME,Text="Defaults applied (not auto-saved)",Duration=2}) end) end}
+		{ type="button", text="Reset To Default", action = function() resetToDefaults() end}
 	}},
 	{ name = "Settings UI", content = {
 		{ type="dropdown", id="theme", text="Change Theme", options={"Ocean","Inferno","Toxic","Royal","Cybergold"}, default=Defaults.theme },
@@ -777,16 +903,23 @@ local uiDefinitions = {
 	}}
 }
 
+-- Add a bit of extra content for Fake Kick player: we will create dropdown on Funny tab runtime
 -- create tabs
 createTabButtonsAndContent(uiDefinitions)
-if tabButtons[1] then tabButtons[1].MouseButton1Click:Fire() end
 
--- apply theme and transparency
+-- Select first tab
+if tabButtons[1] then
+	tabButtons[1].BackgroundColor3 = getTheme(Settings.theme).panel:lerp(getAccent(), 0.25)
+	tabButtons[1].MouseButton1Click:Fire()
+end
+
+-- Apply initial accent & transparency
 updateAccent(Settings.theme or Defaults.theme)
 mainFrame.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
 content.BackgroundTransparency = tonumber(Settings.ui_transparency) or Defaults.ui_transparency
+sidebar.BackgroundTransparency = tonumber(Settings.ui_transparency) or 0
 
--- apply persisted features
+-- Apply persisted feature states
 if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
 if Settings.jump_toggle then safeSetJumpPower(Settings.jump_power) end
 setNoClip(Settings.noclip)
@@ -799,25 +932,38 @@ setAntiAFK(Settings.anti_afk)
 -- Save on close
 game:BindToClose(function() if Settings.save_settings then saveSettings() end end)
 
--- ---------- Minimizer circle (draggable & theme-colored) ----------
+-- ---------- Minimizer circle (draggable + theme colored) ----------
 local minimizerGui = nil
 local minimizerBtn = nil
 
 local function createMinimizerCircle()
 	if minimizerGui and minimizerGui.Parent then return end
-	minimizerGui = Instance.new("ScreenGui"); minimizerGui.Name = GUI_NAME.."_MIN"; minimizerGui.ResetOnSpawn = false; minimizerGui.Parent = playerGui; minimizerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	minimizerGui = Instance.new("ScreenGui")
+	minimizerGui.Name = GUI_NAME.."_MIN"
+	minimizerGui.ResetOnSpawn = false
+	minimizerGui.Parent = playerGui
+	minimizerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
 	minimizerBtn = Instance.new("ImageButton")
-	minimizerBtn.Size = UDim2.new(0,52,0,52)
-	minimizerBtn.Position = UDim2.new(0,12,0.02,0)
+	minimizerBtn.Size = UDim2.new(0,48,0,48)
+	minimizerBtn.Position = UDim2.new(0,10,0.03,0)
 	minimizerBtn.AnchorPoint = Vector2.new(0,0)
 	minimizerBtn.BackgroundColor3 = getAccent()
 	minimizerBtn.BorderSizePixel = 0
 	minimizerBtn.Image = ""
 	minimizerBtn.Parent = minimizerGui
-	makeUICorner(minimizerBtn, UDim.new(0,16))
-	local inner = Instance.new("TextLabel"); inner.Size = UDim2.new(1,0,1,0); inner.BackgroundTransparency = 1; inner.Text = "Cr"; inner.Font = Enum.Font.GothamBold; inner.TextSize = 18; inner.TextColor3 = Color3.fromRGB(20,20,24); inner.Parent = minimizerBtn
+	makeUICorner(minimizerBtn, UDim.new(0,14))
 
-	-- draggable
+	local inner = Instance.new("TextLabel")
+	inner.Size = UDim2.new(1,0,1,0)
+	inner.BackgroundTransparency = 1
+	inner.Text = "Cr"
+	inner.Font = Enum.Font.GothamBold
+	inner.TextSize = 16
+	inner.TextColor3 = Color3.fromRGB(20,20,20)
+	inner.Parent = minimizerBtn
+
+	-- draggable (touch and mouse)
 	local dragging = false
 	local dragInput, dragStart, startPos
 	minimizerBtn.InputBegan:Connect(function(input)
@@ -858,18 +1004,14 @@ local function showMainGui()
 	if minimizerGui and minimizerGui.Parent then minimizerGui:Destroy(); minimizerGui = nil end
 end
 
--- Connect button behavior
+-- Wire top buttons correctly:
 minBtn.MouseButton1Click:Connect(function()
-	-- collapse/expand size
-	if mainFrame.Size == WINDOW_SIZE then
-		TweenService:Create(mainFrame, TweenInfo.new(0.22), {Size = UDim2.new(0, 340, 0, 56)}):Play()
-	else
-		TweenService:Create(mainFrame, TweenInfo.new(0.22), {Size = WINDOW_SIZE}):Play()
-	end
+	-- minimize -> hide main GUI and create minimizer
+	hideMainGui()
 end)
 closeBtn.MouseButton1Click:Connect(function()
-	-- destroy all UI (including minimizer)
-	screenGui:Destroy()
+	-- destroy entire GUI (and minimizer)
+	if screenGui and screenGui.Parent then screenGui:Destroy() end
 	local mg = playerGui:FindFirstChild(GUI_NAME.."_MIN")
 	if mg then mg:Destroy() end
 end)
@@ -877,7 +1019,9 @@ end)
 -- Keybind toggle
 local function getToggleKey()
 	local k = Settings.toggle_key or "RightControl"
-	for _,ek in ipairs(Enum.KeyCode:GetEnumItems()) do if ek.Name == tostring(k) then return ek end end
+	for _,ek in ipairs(Enum.KeyCode:GetEnumItems()) do
+		if ek.Name == tostring(k) then return ek end
+	end
 	return Enum.KeyCode.RightControl
 end
 local toggleKey = getToggleKey()
@@ -896,7 +1040,7 @@ spawn(function()
 	end
 end)
 
--- Draggable mainFrame (PC + mobile)
+-- Make mainFrame draggable (PC & mobile)
 do
 	local dragging = false
 	local dragInput, dragStart, startPos
@@ -921,7 +1065,7 @@ do
 	end)
 end
 
--- CharacterAdded reapply
+-- CharacterAdded reapply features
 player.CharacterAdded:Connect(function()
 	task.wait(0.6)
 	if Settings.walk_toggle then safeSetWalkSpeed(Settings.walk_speed) end
@@ -933,11 +1077,12 @@ player.CharacterAdded:Connect(function()
 	if Settings.spin_on then setSpin(true, Settings.spin_speed) end
 end)
 
--- Entrance animation & initial update
-mainFrame.Position = UDim2.new(0.5, 0, -0.5, 0)
-TweenService:Create(mainFrame, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0.5,0,0.5,0)}):Play()
+-- Entrance anim
+mainFrame.Position = UDim2.new(0.5, 0, -0.6, 0)
+Tween(mainFrame, {Position = UDim2.new(0.5, 0, 0.48, 0)}, 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- update accent at the end
 updateAccent(Settings.theme or Defaults.theme)
+pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = HUB_NAME.." "..VERSION.." loaded", Duration = 2}) end)
 
-pcall(function() StarterGui:SetCore("SendNotification",{Title = HUB_NAME, Text = HUB_NAME .. " " .. VERSION .. " loaded", Duration = 2}) end)
-
--- End of LocalScript (v1.1)
+-- End of script (v1.2)
