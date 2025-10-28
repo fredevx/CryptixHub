@@ -1,7 +1,6 @@
--- Criptix Hub | v1.6.2 (WindUI compatibility fix)
--- Developer: Freddy Bear
--- Notes: Compatible con la variante de WindUI detectada en tu entorno.
--- Pegar como LocalScript en StarterGui
+-- Criptix Hub | v1.6.4 (WindUI - Floating button kept)
+-- Dev: Freddy Bear
+-- Paste as LocalScript into StarterGui
 
 -- Services
 local Players = game:GetService("Players")
@@ -36,27 +35,26 @@ end
 
 showLoading()
 
--- Load WindUI (remote)
+-- Load WindUI
 local ok, ui = pcall(function()
     return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 end)
 if not ok or type(ui) ~= "table" then
     hideLoading()
-    warn("[CriptixHub] Failed to load WindUI")
+    warn("[CriptixHub] WindUI load failed")
     return
 end
 
--- Create window (pass a table to match your WindUI)
-local win = nil
+-- Create window (table config) — adapted to your detected WindUI variant
+local win
 local ok2, err2 = pcall(function()
     win = ui:CreateWindow({
-        Title = "Criptix Hub | v1.6.2 🌐",
+        Title = "Criptix Hub | v1.6.4 🌐",
         Size = UDim2.fromOffset(760, 420),
         Transparent = true,
         Theme = "Dark",
         SideBarWidth = 200,
-        -- don't set Folder/makefolder to avoid file API makefolder errors in some environments
-        User = { Enabled = false, Anonymous = false }
+        User = { Enabled = false, Anonymous = false } -- user disabled (no real user)
     })
 end)
 if not ok2 or not win then
@@ -65,21 +63,19 @@ if not ok2 or not win then
     return
 end
 
--- optionally add Edit/Open button if WindUI supports it
-pcall(function() if win.EditOpenButton then win:EditOpenButton({ Title = "Criptix Hub", UseRound = true }) end end)
+-- Provide safe notify wrapper
+local function safeNotify(tbl)
+    pcall(function() if ui and ui.Notify then ui:Notify(tbl) end end)
+end
 
--- Helpers
+-- Utility helpers
 local function getHumanoid()
     local ch = player.Character
     if not ch then return nil end
     return ch:FindFirstChildOfClass("Humanoid")
 end
 
-local function safeNotify(t)
-    pcall(function() if ui and ui.Notify then ui:Notify(t) end end)
-end
-
--- Create tabs (table-style to match your variant)
+-- ========== TABS & CONTENT ==========
 local tabInfo     = win:Tab({ Title = "Info" })
 local tabMain     = win:Tab({ Title = "Main" })
 local tabFunny    = win:Tab({ Title = "Funny" })
@@ -87,25 +83,20 @@ local tabMisc     = win:Tab({ Title = "Misc" })
 local tabSettings = win:Tab({ Title = "Settings" })
 local tabSUI      = win:Tab({ Title = "Settings UI" })
 
--- ======================
--- INFO TAB
--- ======================
+-- INFO
 local secInfo = tabInfo:Section("About")
-secInfo:Paragraph({ Title = "Criptix Hub | v1.6.2", Content = "Universal exploit hub — Freddy Bear\nOther devs: snitadd, chatgpt, wind" })
+secInfo:Paragraph({ Title = "Criptix Hub | v1.6.4", Content = "Universal hub — Freddy Bear\nOther devs: snitadd, chatgpt, wind" })
 secInfo:Button({ Title = "Copy Discord Invite", Callback = function()
     pcall(function() setclipboard("https://discord.gg/yourinvite") end)
-    safeNotify({ Title = "Criptix", Description = "Discord invite copied", Duration = 2 })
+    safeNotify({ Title="Criptix", Description="Discord invite copied", Duration=2 })
 end })
 
--- ======================
--- MAIN TAB
--- ======================
--- sections
+-- MAIN
 local secBasic    = tabMain:Section("Basic")
 local secAdvanced = tabMain:Section("Advanced")
 local secFly      = tabMain:Section("Fly")
 
--- WalkSpeed controls
+-- Walk speed
 local walkEnabled = false
 local walkSpeed = 32
 secBasic:Toggle({ Title = "Enable Custom WalkSpeed", Default = false, Callback = function(state)
@@ -115,13 +106,12 @@ secBasic:Toggle({ Title = "Enable Custom WalkSpeed", Default = false, Callback =
         if walkEnabled then pcall(function() hum.WalkSpeed = walkSpeed end) else pcall(function() hum.WalkSpeed = 16 end) end
     end
 end })
-
-secBasic:Slider({ Title = "Walk Speed (16-200)", Min = 16, Max = 200, Default = 32, Callback = function(val)
-    walkSpeed = math.clamp(tonumber(val) or 32, 16, 200)
+secBasic:Slider({ Title = "Walk Speed (16-200)", Min = 16, Max = 200, Default = 32, Callback = function(v)
+    walkSpeed = math.clamp(tonumber(v) or 32, 16, 200)
     if walkEnabled then local hum = getHumanoid(); if hum then pcall(function() hum.WalkSpeed = walkSpeed end) end end
 end })
 
--- JumpPower
+-- Jump power
 local jumpEnabled = false
 local jumpPower = 50
 secBasic:Toggle({ Title = "Enable Custom JumpPower", Default = false, Callback = function(state)
@@ -131,22 +121,20 @@ secBasic:Toggle({ Title = "Enable Custom JumpPower", Default = false, Callback =
         if jumpEnabled then pcall(function() hum.JumpPower = jumpPower end) else pcall(function() hum.JumpPower = 50 end) end
     end
 end })
-
-secBasic:Slider({ Title = "Jump Power (50-500)", Min = 50, Max = 500, Default = 50, Callback = function(val)
-    jumpPower = math.clamp(tonumber(val) or 50, 50, 500)
+secBasic:Slider({ Title = "Jump Power (50-500)", Min = 50, Max = 500, Default = 50, Callback = function(v)
+    jumpPower = math.clamp(tonumber(v) or 50, 50, 500)
     if jumpEnabled then local hum = getHumanoid(); if hum then pcall(function() hum.JumpPower = jumpPower end) end end
 end })
 
--- Advanced: NoClip & God
-local noclipConn; local noclipOn = false
+-- NoClip
+local noclipConn
+local noclipOn = false
 secAdvanced:Toggle({ Title = "No Clip (client)", Default = false, Callback = function(v)
     noclipOn = v
     if noclipOn then
         noclipConn = RunService.Stepped:Connect(function()
             local ch = player.Character
-            if ch then
-                for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
-            end
+            if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
         end)
         safeNotify({ Title="Criptix", Description="NoClip enabled", Duration=1.5 })
     else
@@ -157,6 +145,7 @@ secAdvanced:Toggle({ Title = "No Clip (client)", Default = false, Callback = fun
     end
 end })
 
+-- God Mode
 local godConn
 secAdvanced:Toggle({ Title = "God Mode (client)", Default = false, Callback = function(v)
     if v then
@@ -175,7 +164,7 @@ secAdvanced:Toggle({ Title = "God Mode (client)", Default = false, Callback = fu
     end
 end })
 
--- Fly: toggle + speed slider
+-- Fly
 local flyOn = false
 local flySpeed = 50
 local flyBV, flyBG, flyConn
@@ -212,13 +201,9 @@ secFly:Toggle({ Title = "Fly (client)", Default = false, Callback = function(v)
         safeNotify({ Title="Criptix", Description="Fly disabled", Duration=1.5 })
     end
 end })
+secFly:Slider({ Title = "Fly Speed (16-200)", Min = 16, Max = 200, Default = 50, Callback = function(v) flySpeed = math.clamp(tonumber(v) or 50, 16, 200) end })
 
-secFly:Slider({ Title = "Fly Speed (16-200)", Min = 16, Max = 200, Default = 50, Callback = function(val) flySpeed = math.clamp(tonumber(val) or 50, 16, 200) end })
-
--- ======================
--- FUNNY TAB
--- ======================
--- Directly add elements to tab via sections (Section exists in your WindUI)
+-- FUNNY
 local secFunnyA = tabFunny:Section(":)")
 local secFunnyB = tabFunny:Section("Character")
 
@@ -226,7 +211,6 @@ secFunnyA:Button({ Title = "Walk on Wall (attempt)", Callback = function()
     safeNotify({ Title="Criptix", Description="Walk on Wall attempted (game-dependent)", Duration=2 })
 end })
 
--- Touch/Click fling (10s)
 secFunnyA:Button({ Title = "Enable Touch Fling (10s)", Callback = function()
     safeNotify({ Title="Criptix", Description="Touch/Click fling active (10s)", Duration=2 })
     local mouse = player:GetMouse()
@@ -273,7 +257,6 @@ secFunnyB:Toggle({ Title = "Rainbow Body", Default = false, Callback = function(
 end })
 
 secFunnyB:Slider({ Title = "Spin Speed (1-100)", Min = 1, Max = 100, Default = 20, Callback = function(val) _G.Cr_SpinSpeed = math.clamp(tonumber(val) or 20, 1, 100) end })
-
 secFunnyB:Toggle({ Title = "Spin Character", Default = false, Callback = function(state)
     if state then
         safeNotify({ Title="Criptix", Description="Spinning on", Duration=1.5 })
@@ -291,9 +274,7 @@ secFunnyB:Toggle({ Title = "Spin Character", Default = false, Callback = functio
     end
 end })
 
--- ======================
--- MISC TAB
--- ======================
+-- MISC
 local secMiscAFK = tabMisc:Section("For AFK")
 local secMiscServer = tabMisc:Section("Server")
 
@@ -310,7 +291,6 @@ secMiscAFK:Toggle({ Title = "Anti AFK", Default = false, Callback = function(v)
     end
 end })
 
--- Darken Game (hide textures/decals)
 secMiscAFK:Button({ Title = "Darken Game", Callback = function()
     for _,obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("Texture") or obj:IsA("Decal") then pcall(function() obj.Transparency = 1 end) end
@@ -318,7 +298,6 @@ secMiscAFK:Button({ Title = "Darken Game", Callback = function()
     safeNotify({ Title="Criptix", Description="Game darkened (textures hidden)", Duration=2 })
 end })
 
--- FPS Boost: set parts to SmoothPlastic
 secMiscAFK:Button({ Title = "FPS Boost", Callback = function()
     for _,obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") then pcall(function() obj.Material = Enum.Material.SmoothPlastic end) end
@@ -333,9 +312,7 @@ secMiscServer:Button({ Title = "Rejoin Server", Callback = function()
     pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
 end })
 
--- ======================
--- SETTINGS TAB
--- ======================
+-- SETTINGS
 local secSettingsMain = tabSettings:Section("General")
 secSettingsMain:Button({ Title = "Save Settings", Callback = function()
     safeNotify({ Title="Criptix", Description="Settings saved (not persisted)", Duration=1.5 })
@@ -347,29 +324,121 @@ secSettingsMain:Button({ Title = "Reset To Default", Callback = function()
     safeNotify({ Title="Criptix", Description="Defaults applied", Duration=1.5 })
 end })
 
--- ======================
--- SETTINGS UI TAB
--- ======================
+-- SETTINGS UI
 local secSUIAppear = tabSUI:Section("Appearance")
 secSUIAppear:Dropdown({ Title = "Change Theme", Values = {"Dark","Light","Ocean","Inferno"}, Callback = function(choice)
     if choice and ui.SetTheme then pcall(function() ui:SetTheme(choice) end) end
     safeNotify({ Title="Criptix", Description="Theme set: "..tostring(choice), Duration=1.2 })
 end })
-
 secSUIAppear:Keybind({ Title = "Toggle UI Keybind", Default = Enum.KeyCode.RightControl, Callback = function()
     if win and win.Toggle then pcall(function() win:Toggle() end) end
 end })
-
 secSUIAppear:Slider({ Title = "Transparency (0.0 - 0.8)", Min = 0, Max = 0.8, Default = 0.5, Callback = function(v)
     if win and win.SetTransparency then pcall(function() win:SetTransparency(v) end) end
     safeNotify({ Title="Criptix", Description="Transparency: "..tostring(v), Duration=1 })
 end })
 
--- Finalize
-hideLoading()
-safeNotify({ Title="Criptix", Description="v1.6.2 loaded successfully", Duration=2 })
+-- ========== Floating draggable open button ==========
+-- Create a small ScreenGui with draggable ImageButton that toggles the window
+local function createFloatingButton()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "CriptixHub_Button"
+    sg.ResetOnSpawn = false
+    sg.Parent = playerGui
 
--- Reapply settings on respawn
+    local frame = Instance.new("Frame")
+    frame.Name = "Container"
+    frame.Size = UDim2.new(0,70,0,70)
+    frame.Position = UDim2.new(0.85,0,0.06,0)
+    frame.BackgroundTransparency = 1
+    frame.Parent = sg
+
+    local btn = Instance.new("ImageButton")
+    btn.Name = "OpenBtn"
+    btn.Size = UDim2.fromOffset(60,60)
+    btn.Position = UDim2.fromScale(0.5,0.5)
+    btn.AnchorPoint = Vector2.new(0.5,0.5)
+    btn.BackgroundTransparency = 0
+    btn.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    btn.BorderSizePixel = 0
+    btn.Image = "" -- leave blank or set to an asset id
+    btn.AutoButtonColor = true
+    btn.Parent = frame
+
+    -- corner
+    local uic = Instance.new("UICorner", btn)
+    uic.CornerRadius = UDim.new(0,16)
+
+    -- small glow border (optional)
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Thickness = 2
+    stroke.Color = Color3.fromRGB(68, 196, 255)
+    stroke.Transparency = 0.6
+
+    -- label (small)
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1,0,0,16)
+    lbl.Position = UDim2.new(0,0,1,2)
+    lbl.AnchorPoint = Vector2.new(0,0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "Criptix"
+    lbl.TextSize = 12
+    lbl.TextColor3 = Color3.fromRGB(200,200,200)
+    lbl.Font = Enum.Font.SourceSans
+    lbl.TextWrapped = true
+
+    -- Dragging support (touch + mouse)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        frame.Position = newPos
+    end
+
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    btn.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
+            update(input)
+        end
+    end)
+
+    -- Toggle window on click
+    btn.MouseButton1Click:Connect(function()
+        pcall(function() if win and win.Toggle then win:Toggle() else if win and win.Open then win:Open() end end end)
+    end)
+
+    return sg, btn
+end
+
+-- create the floating button
+local sgButton, openBtn = pcall(function() return createFloatingButton() end)
+-- if creation failed, continue silently
+
+-- finalize load
+hideLoading()
+safeNotify({ Title="Criptix", Description="v1.6.4 loaded", Duration=2 })
+
+-- Reapply features on respawn
 player.CharacterAdded:Connect(function()
     task.wait(0.6)
     if walkEnabled then local hum = getHumanoid(); if hum then pcall(function() hum.WalkSpeed = walkSpeed end) end end
