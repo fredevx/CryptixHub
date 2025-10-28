@@ -1,47 +1,79 @@
--- Criptix Hub | v1.6.5 (Robust renderer, WindUI tolerant)
+-- Criptix Hub | v1.6.6 (Fixes: loading, float button removed, tabs reorganized, slider fallback)
 -- Dev: Freddy Bear
--- Paste as LocalScript in StarterGui (replaces prior versions)
+-- Paste as a single LocalScript into StarterGui
 
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TeleportService = game:GetService("TeleportService")
-local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local function showLoading()
+-- -------------------------
+-- Loading overlay (self-managed so it can always be removed)
+-- -------------------------
+local loadingGui
+local function showLoadingOverlay()
     pcall(function()
-        StarterGui:SetCore("SendNotification", {Title="Criptix Hub", Text="Please wait, Criptix Hub is loading...", Duration=9999})
+        if loadingGui and loadingGui.Parent then return end
+        loadingGui = Instance.new("ScreenGui")
+        loadingGui.Name = "Criptix_LoadingOverlay"
+        loadingGui.ResetOnSpawn = false
+        loadingGui.Parent = playerGui
+
+        local frame = Instance.new("Frame", loadingGui)
+        frame.Size = UDim2.new(0,300,0,60)
+        frame.Position = UDim2.new(0.5,-150,0.9,-30)
+        frame.BackgroundTransparency = 0.35
+        frame.BackgroundColor3 = Color3.fromRGB(10,10,10)
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 1000
+        local uic = Instance.new("UICorner", frame); uic.CornerRadius = UDim.new(0,10)
+
+        local txt = Instance.new("TextLabel", frame)
+        txt.Size = UDim2.new(1,-20,1,-20)
+        txt.Position = UDim2.new(0,10,0,10)
+        txt.BackgroundTransparency = 1
+        txt.TextColor3 = Color3.fromRGB(220,220,220)
+        txt.TextScaled = false
+        txt.Font = Enum.Font.SourceSansSemibold
+        txt.TextSize = 16
+        txt.Text = "Please wait, Criptix Hub is loading..."
+        txt.ZIndex = 1001
     end)
 end
-local function hideLoading()
+local function hideLoadingOverlay()
     pcall(function()
-        StarterGui:SetCore("SendNotification", {Title="Criptix Hub", Text=" ", Duration=0.1})
+        if loadingGui then
+            loadingGui:Destroy()
+            loadingGui = nil
+        end
     end)
 end
 
-showLoading()
+showLoadingOverlay()
 
--- Load WindUI
+-- -------------------------
+-- Load WindUI (robust)
+-- -------------------------
 local ok, ui = pcall(function()
     return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 end)
 if not ok or type(ui) ~= "table" then
-    hideLoading()
+    hideLoadingOverlay()
     warn("[CriptixHub] WindUI load failed")
     return
 end
 
--- Create window (table config)
+-- Create window (use table config)
 local win
 local ok2, err2 = pcall(function()
     win = ui:CreateWindow({
-        Title = "Criptix Hub | v1.6.5 🌐",
-        Size = UDim2.fromOffset(760,420),
+        Title = "Criptix Hub | v1.6.6 🌐",
+        Size = UDim2.fromOffset(760, 420),
         Transparent = true,
         Theme = "Dark",
         SideBarWidth = 200,
@@ -49,268 +81,376 @@ local ok2, err2 = pcall(function()
     })
 end)
 if not ok2 or not win then
-    hideLoading()
+    hideLoadingOverlay()
     warn("[CriptixHub] CreateWindow failed:", err2)
     return
 end
 
--- safe wrappers to detect and call multiple method signatures
-local function callAdd(target, methodNames, params)
-    -- methodNames: array of possible method names, prefer first
-    for _,m in ipairs(methodNames) do
-        local fn = target[m]
-        if type(fn) == "function" then
-            -- try table-style param first
-            local ok,err = pcall(function() fn(target, params) end)
-            if ok then return true end
-            -- fallback: some APIs expect signature (title, callback) or (title, default, cb)
-            if params and params.Title and params.Callback then
-                local ok2 = pcall(function() fn(target, params.Title, params.Callback) end)
-                if ok2 then return true end
-            end
-            -- fallback: try unpacked (title, min,max,default,cb) for sliders
-            if params and params.Title and params.Min and params.Max and params.Default and params.Callback then
-                pcall(function() fn(target, params.Title, params.Min, params.Max, params.Default, params.Callback) end)
-                return true
-            end
-        end
-    end
-    return false
-end
-
--- robust section factory: returns a place to add elements (section or tab)
-local function makeSection(tab, name)
-    -- prefer tab:Section if exists
-    if type(tab.Section) == "function" then
-        local ok, sec = pcall(function() return tab:Section(name) end)
-        if ok and sec then return sec end
-    end
-    -- Maybe API uses tab:CreateSection or tab:AddSection
-    if type(tab.AddSection) == "function" then
-        local ok, sec = pcall(function() return tab:AddSection(name) end)
-        if ok and sec then return sec end
-    end
-    if type(tab.CreateSection) == "function" then
-        local ok, sec = pcall(function() return tab:CreateSection(name) end)
-        if ok and sec then return sec end
-    end
-    -- fallback: return tab itself (direct add)
-    return tab
-end
-
--- ensure rendering: select tab and open window if needed
-local function ensureVisible(tab)
-    pcall(function()
-        if type(tab.Select) == "function" then pcall(function() tab:Select() end) end
-        if type(win.SelectTab) == "function" then pcall(function() win:SelectTab(tab) end) end
-        if type(win.Open) == "function" and not win.Closed then pcall(function() win:Open() end) end
-        if type(win.Toggle) == "function" then pcall(function() win:Toggle() end) end
-    end)
-end
-
--- safe notify
+-- safe notify wrapper
 local function safeNotify(tbl)
     pcall(function() if ui and ui.Notify then ui:Notify(tbl) end end)
 end
 
--- helper: add common elements with multiple fallback method names
-local function addButton(container, title, callback)
-    callAdd(container, {"Button","AddButton","AddBtn"}, { Title = title, Callback = callback })
-end
-local function addToggle(container, title, default, callback)
-    callAdd(container, {"Toggle","AddToggle"}, { Title = title, Default = default, Callback = callback })
-end
-local function addSlider(container, title, min, max, default, callback)
-    callAdd(container, {"Slider","AddSlider"}, { Title = title, Min = min, Max = max, Default = default, Callback = callback })
-end
-local function addParagraph(container, title, content)
-    callAdd(container, {"Paragraph","AddParagraph","Paragraph"}, { Title = title, Content = content })
-end
-local function addDropdown(container, title, values, callback)
-    callAdd(container, {"Dropdown","AddDropdown"}, { Title = title, Values = values, Callback = callback })
-end
-local function addKeybind(container, title, default, callback)
-    callAdd(container, {"Keybind","AddKeybind"}, { Title = title, Default = default, Callback = callback })
+-- -------------------------
+-- Utility helpers
+-- -------------------------
+local function getHumanoid()
+    local ch = player.Character
+    if not ch then return nil end
+    return ch:FindFirstChildOfClass("Humanoid")
 end
 
--- create tab helper that populates robustly
-local function populateTab(tab, definition)
-    local sect = makeSection(tab, definition.sectionName or "")
-    for _,el in ipairs(definition.elements) do
-        local typ = el.type
-        if typ == "paragraph" then addParagraph(sect, el.title or "", el.content or "") end
-        if typ == "button" then addButton(sect, el.title or "Button", el.callback) end
-        if typ == "toggle" then addToggle(sect, el.title or "Toggle", el.default or false, el.callback) end
-        if typ == "slider" then addSlider(sect, el.title or "Slider", el.min or 0, el.max or 100, el.default or 0, el.callback) end
-        if typ == "dropdown" then addDropdown(sect, el.title or "Dropdown", el.values or {}, el.callback) end
-        if typ == "keybind" then addKeybind(sect, el.title or "Keybind", el.default, el.callback) end
+-- fallback-add helpers for multiple WindUI signatures (keeps robust behavior)
+local function tryCall(target, name, ...)
+    local fn = target[name]
+    if type(fn) == "function" then
+        local ok, res = pcall(fn, target, ...)
+        if ok then return res end
+        -- try calling without passing target as first param (some APIs)
+        ok, res = pcall(fn, ...)
+        if ok then return res end
     end
-    -- force show
-    ensureVisible(tab)
+    return nil
 end
 
--- ============================
--- Build all tabs with robust calls
--- ============================
-
--- INFO
-populateTab(win:Tab({ Title = "Info" }), {
-    sectionName = "About",
-    elements = {
-        { type = "paragraph", title = "Criptix Hub | v1.6.5", content = "Universal hub — Freddy Bear\nOther devs: snitadd, chatgpt, wind" },
-        { type = "button", title = "Copy Discord Invite", callback = function() pcall(function() setclipboard("https://discord.gg/yourinvite") end); safeNotify({Title="Criptix", Description="Invite copied", Duration=2}) end }
-    }
-})
-
--- MAIN
-populateTab(win:Tab({ Title = "Main" }), {
-    sectionName = "Basic",
-    elements = {
-        { type = "toggle", title = "Enable Custom WalkSpeed", default = false, callback = function(state) _G._Cr_WalkEnabled = state; local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then pcall(function() hum.WalkSpeed = state and (_G._Cr_WalkSpeed or 32) or 16 end) end end },
-        { type = "slider", title = "Walk Speed (16-200)", min = 16, max = 200, default = 32, callback = function(v) _G._Cr_WalkSpeed = math.clamp(tonumber(v) or 32,16,200); if _G._Cr_WalkEnabled then local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then pcall(function() hum.WalkSpeed = _G._Cr_WalkSpeed end) end end end },
-        { type = "toggle", title = "Enable Custom JumpPower", default = false, callback = function(state) _G._Cr_JumpEnabled = state; local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then pcall(function() hum.JumpPower = state and (_G._Cr_JumpPower or 50) or 50 end) end end },
-        { type = "slider", title = "Jump Power (50-500)", min = 50, max = 500, default = 50, callback = function(v) _G._Cr_JumpPower = math.clamp(tonumber(v) or 50,50,500); if _G._Cr_JumpEnabled then local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then pcall(function() hum.JumpPower = _G._Cr_JumpPower end) end end end }
-    }
-})
-
--- Advanced (NoClip / God)
-populateTab(win:Tab({ Title = "Advanced" }), {
-    sectionName = "Advanced",
-    elements = {
-        { type = "toggle", title = "No Clip (client)", default = false, callback = function(state)
-            if state then
-                _G._Cr_NoclipConn = RunService.Stepped:Connect(function()
-                    local ch = player.Character
-                    if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
-                end)
-            else
-                if _G._Cr_NoclipConn then _G._Cr_NoclipConn:Disconnect(); _G._Cr_NoclipConn = nil end
+-- small helper that attempts common names/signatures
+local function addElement(container, kind, opts)
+    -- try section-style api first (container:Button{...})
+    local names = {}
+    if kind == "button" then names = {"Button","AddButton","AddBtn"} end
+    if kind == "toggle" then names = {"Toggle","AddToggle"} end
+    if kind == "slider" then names = {"Slider","AddSlider"} end
+    if kind == "paragraph" then names = {"Paragraph","AddParagraph"} end
+    if kind == "dropdown" then names = {"Dropdown","AddDropdown"} end
+    if kind == "keybind" then names = {"Keybind","AddKeybind"} end
+    for _,n in ipairs(names) do
+        local ok, res = pcall(function() 
+            local fn = container[n]
+            if type(fn) == "function" then
+                -- prefer table param if available
+                local succ = pcall(function() fn(container, opts) end)
+                if succ then return true end
+                -- fallback signatures:
+                if kind == "button" and opts.Title and opts.Callback then
+                    pcall(function() fn(container, opts.Title, opts.Callback) end)
+                    return true
+                end
+                if kind == "toggle" and opts.Title and opts.Callback then
+                    pcall(function() fn(container, opts.Title, opts.Default or false, opts.Callback) end)
+                    return true
+                end
+                if kind == "slider" and opts.Title and opts.Callback then
+                    pcall(function() fn(container, opts.Title, opts.Min or 0, opts.Max or 100, opts.Default or 0, opts.Callback) end)
+                    return true
+                end
             end
-            safeNotify({Title="Criptix", Description=(state and "NoClip enabled" or "NoClip disabled"), Duration=1.2})
-        end },
-        { type = "toggle", title = "God Mode (client)", default = false, callback = function(state)
-            if state then
-                _G._Cr_GodConn = RunService.Heartbeat:Connect(function() local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h.Health = h.MaxHealth end) end end)
-                local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h.MaxHealth = math.huge; h.Health = h.MaxHealth end) end
-            else
-                if _G._Cr_GodConn then _G._Cr_GodConn:Disconnect(); _G._Cr_GodConn = nil end
-                local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h.MaxHealth = 100; h.Health = math.clamp(h.Health,0,100) end) end
+        end)
+        if ok and res then return true end
+    end
+    return false
+end
+
+-- section factory (prefer section, fallback to tab)
+local function makeSection(tabObj, name)
+    if type(tabObj.Section) == "function" then
+        local ok, sec = pcall(function() return tabObj:Section(name) end)
+        if ok and sec then return sec end
+    end
+    if type(tabObj.AddSection) == "function" then
+        local ok, sec = pcall(function() return tabObj:AddSection(name) end)
+        if ok and sec then return sec end
+    end
+    -- fallback: return tab itself
+    return tabObj
+end
+
+-- force render helper
+local function forceSelect(tabObj)
+    pcall(function()
+        if type(tabObj.Select) == "function" then pcall(function() tabObj:Select() end) end
+        if type(win.SelectTab) == "function" then pcall(function() win:SelectTab(tabObj) end) end
+        if type(win.Open) == "function" and not win.Closed then pcall(function() win:Open() end) end
+    end)
+end
+
+-- -------------------------
+-- Tab creation (reorganized as requested)
+-- -------------------------
+local tabInfo     = win:Tab({ Title = "Info" })
+local tabMain     = win:Tab({ Title = "Main" })
+local tabFunny    = win:Tab({ Title = "Funny" })
+local tabMisc     = win:Tab({ Title = "Misc" })
+local tabSettings = win:Tab({ Title = "Settings" })
+local tabSUI      = win:Tab({ Title = "Settings UI" })
+
+-- =========================
+-- INFO (completed)
+-- =========================
+local secInfo = makeSection(tabInfo, "About")
+addElement(secInfo, "paragraph", { Title = "Criptix Hub | v1.6.6", Content = "Universal exploit hub\nDeveloper: Freddy Bear\nOther devs: snitadd, ChatGPT, Wind\nVersion: v1.6.6\nGitHub: https://github.com/yourrepo" })
+addElement(secInfo, "paragraph", { Title = "Usage", Content = "Open the menu (wind UI) and use the sections at left. Use sliders or numeric controls if slider doesn't move." })
+addElement(secInfo, "button", { Title = "Copy GitHub Link", Callback = function() pcall(setclipboard, "https://github.com/yourrepo"); safeNotify({ Title="Criptix", Description="GitHub link copied", Duration=2 }) end })
+forceSelect(tabInfo)
+
+-- =========================
+-- MAIN (Basic + Advanced merged here)
+-- =========================
+local secBasic    = makeSection(tabMain, "Basic")
+local secAdvanced = makeSection(tabMain, "Advanced")
+local secFly      = makeSection(tabMain, "Fly")
+
+-- Walk speed: slider + numeric backup
+_G._Cr_WalkSpeed = 32
+_G._Cr_WalkEnabled = false
+addElement(secBasic, "toggle", { Title = "Enable Custom WalkSpeed", Default = false, Callback = function(s) _G._Cr_WalkEnabled = s; local h = getHumanoid(); if h then pcall(function() h.WalkSpeed = s and _G._Cr_WalkSpeed or 16 end) end end })
+local function setWalkSpeed(v)
+    _G._Cr_WalkSpeed = math.clamp(tonumber(v) or 32, 16, 200)
+    if _G._Cr_WalkEnabled then local h = getHumanoid(); if h then pcall(function() h.WalkSpeed = _G._Cr_WalkSpeed end) end end
+end
+-- try native slider
+local sliderOk = addElement(secBasic, "slider", { Title = "Walk Speed (16-200)", Min = 16, Max = 200, Default = 32, Callback = setWalkSpeed })
+-- numeric fallback controls (always present as backup)
+addElement(secBasic, "paragraph", { Title = "WalkSpeed (numeric controls)", Content = "Use the +/- or input to change value (backup if slider not draggable)." })
+addElement(secBasic, "button", { Title = "- 1", Callback = function() setWalkSpeed((_G._Cr_WalkSpeed or 32) - 1) end })
+addElement(secBasic, "button", { Title = "+ 1", Callback = function() setWalkSpeed((_G._Cr_WalkSpeed or 32) + 1) end })
+if type(secBasic.Input) == "function" then
+    pcall(function() secBasic:Input("Set WalkSpeed (number)", tostring(_G._Cr_WalkSpeed), function(val) setWalkSpeed(val) end) end)
+end
+
+-- JumpPower (slider + numeric backup)
+_G._Cr_JumpPower = 50
+_G._Cr_JumpEnabled = false
+addElement(secBasic, "toggle", { Title = "Enable Custom JumpPower", Default = false, Callback = function(s) _G._Cr_JumpEnabled = s; local h = getHumanoid(); if h then pcall(function() h.JumpPower = s and _G._Cr_JumpPower or 50 end) end end })
+local function setJumpPower(v)
+    _G._Cr_JumpPower = math.clamp(tonumber(v) or 50, 50, 500)
+    if _G._Cr_JumpEnabled then local h = getHumanoid(); if h then pcall(function() h.JumpPower = _G._Cr_JumpPower end) end end
+end
+addElement(secBasic, "slider", { Title = "Jump Power (50-500)", Min = 50, Max = 500, Default = 50, Callback = setJumpPower })
+addElement(secBasic, "paragraph", { Title = "JumpPower (numeric controls)", Content = "" })
+addElement(secBasic, "button", { Title = "- 1", Callback = function() setJumpPower((_G._Cr_JumpPower or 50) - 1) end })
+addElement(secBasic, "button", { Title = "+ 1", Callback = function() setJumpPower((_G._Cr_JumpPower or 50) + 1) end })
+if type(secBasic.Input) == "function" then pcall(function() secBasic:Input("Set JumpPower (number)", tostring(_G._Cr_JumpPower), function(val) setJumpPower(val) end) end) end
+
+-- Advanced options now inside Main (no "(client)")
+addElement(secAdvanced, "toggle", { Title = "No Clip", Default = false, Callback = function(state)
+    if state then
+        _G._Cr_NoclipConn = RunService.Stepped:Connect(function()
+            local ch = player.Character
+            if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
+        end)
+        safeNotify({ Title="Criptix", Description="No Clip enabled", Duration=1 })
+    else
+        if _G._Cr_NoclipConn then _G._Cr_NoclipConn:Disconnect(); _G._Cr_NoclipConn = nil end
+        local ch = player.Character; if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
+        safeNotify({ Title="Criptix", Description="No Clip disabled", Duration=1 })
+    end
+end })
+addElement(secAdvanced, "toggle", { Title = "God Mode", Default = false, Callback = function(state)
+    if state then
+        _G._Cr_GodConn = RunService.Heartbeat:Connect(function() local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h.Health = h.MaxHealth end) end end)
+        local h = getHumanoid(); if h then pcall(function() h.MaxHealth = math.huge; h.Health = h.MaxHealth end) end
+        safeNotify({ Title="Criptix", Description="God Mode enabled", Duration=1 })
+    else
+        if _G._Cr_GodConn then _G._Cr_GodConn:Disconnect(); _G._Cr_GodConn = nil end
+        local h = getHumanoid(); if h then pcall(function() h.MaxHealth = 100; h.Health = math.clamp(h.Health,0,100) end) end
+        safeNotify({ Title="Criptix", Description="God Mode disabled", Duration=1 })
+    end
+end })
+
+-- Fly (slider + numeric fallback)
+_G._Cr_FlySpeed = 50
+addElement(secFly, "toggle", { Title = "Fly", Default = false, Callback = function(state)
+    _G._Cr_FlyOn = state
+    if state then
+        -- create movers
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
+        if not hrp then safeNotify({ Title="Criptix", Description="No HumanoidRootPart found", Duration=2 }); return end
+        _G._Cr_FlyBV = Instance.new("BodyVelocity", hrp); _G._Cr_FlyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+        _G._Cr_FlyBG = Instance.new("BodyGyro", hrp); _G._Cr_FlyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+        _G._Cr_FlyConn = RunService.Heartbeat:Connect(function()
+            local cam = Workspace.CurrentCamera
+            if not cam then return end
+            local mv = Vector3.zero
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then mv = mv - Vector3.new(0,1,0) end
+            if mv.Magnitude > 0 then mv = mv.Unit * (_G._Cr_FlySpeed or 50) end
+            pcall(function() if _G._Cr_FlyBV then _G._Cr_FlyBV.Velocity = mv end end)
+            if _G._Cr_FlyBG and player.Character and Workspace.CurrentCamera then
+                local hrp2 = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChildWhichIsA("BasePart")
+                if hrp2 then _G._Cr_FlyBG.CFrame = CFrame.new(hrp2.Position, hrp2.Position + Workspace.CurrentCamera.CFrame.LookVector) end
             end
-        end }
-    }
-})
+        end)
+        safeNotify({ Title="Criptix", Description="Fly enabled", Duration=1 })
+    else
+        if _G._Cr_FlyConn then _G._Cr_FlyConn:Disconnect(); _G._Cr_FlyConn = nil end
+        if _G._Cr_FlyBV then pcall(function() _G._Cr_FlyBV:Destroy() end); _G._Cr_FlyBV = nil end
+        if _G._Cr_FlyBG then pcall(function() _G._Cr_FlyBG:Destroy() end); _G._Cr_FlyBG = nil end
+        safeNotify({ Title="Criptix", Description="Fly disabled", Duration=1 })
+    end
+end })
+local function setFlySpeed(v) _G._Cr_FlySpeed = math.clamp(tonumber(v) or 50, 16, 200) end
+addElement(secFly, "slider", { Title = "Fly Speed (16-200)", Min = 16, Max = 200, Default = 50, Callback = setFlySpeed })
+-- numeric fallback
+addElement(secFly, "paragraph", { Title = "Fly Speed (numeric)", Content = "" })
+addElement(secFly, "button", { Title = "- 1", Callback = function() setFlySpeed((_G._Cr_FlySpeed or 50) - 1) end })
+addElement(secFly, "button", { Title = "+ 1", Callback = function() setFlySpeed((_G._Cr_FlySpeed or 50) + 1) end })
+if type(secFly.Input) == "function" then pcall(function() secFly:Input("Set Fly Speed (num)", tostring(_G._Cr_FlySpeed), function(val) setFlySpeed(val) end) end) end
 
--- Funny (touch fling, rainbow, spin)
-populateTab(win:Tab({ Title = "Funny" }), {
-    sectionName = ":)",
-    elements = {
-        { type = "button", title = "Walk on Wall (attempt)", callback = function() safeNotify({Title="Criptix", Description="Walk on Wall attempted", Duration=1.5}) end },
-        { type = "button", title = "Enable Touch Fling (10s)", callback = function()
-            safeNotify({Title="Criptix", Description="Touch fling active (10s)", Duration=1})
-            local mouse = player:GetMouse()
-            local conn
-            conn = mouse.Button1Down:Connect(function() local t = mouse.Target; if t then local model = t:FindFirstAncestorOfClass("Model"); if model and model ~= player.Character then local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart"); local myHrp = player.Character and (player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChildWhichIsA("BasePart")); if hrp and myHrp then local p = Instance.new("Part", Workspace); p.Size=Vector3.new(1,1,1); p.Transparency=1; p.Anchored=false; p.CanCollide=false; p.CFrame = myHrp.CFrame * CFrame.new(0,-2,-1); p.Velocity = (hrp.Position - myHrp.Position).Unit * 150; task.delay(0.6,function() pcall(function() p:Destroy() end) end) end end end end)
-            task.delay(10,function() if conn then conn:Disconnect() end; safeNotify({Title="Criptix", Description="Fling disabled", Duration=1}) end)
-        end },
-        { type = "toggle", title = "Rainbow Body", default = false, callback = function(state)
-            if state then
-                _G._Cr_Rain = RunService.Heartbeat:Connect(function() local ch = player.Character; if ch then local hue = (tick()%5)/5; local col = Color3.fromHSV(hue,0.8,1); for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end end end end)
-            else
-                if _G._Cr_Rain then _G._Cr_Rain:Disconnect(); _G._Cr_Rain = nil end
+forceSelect(tabMain)
+
+-- =========================
+-- FUNNY (unchanged)
+-- =========================
+local secFunnyA = makeSection(tabFunny, ":)")
+local secFunnyB = makeSection(tabFunny, "Character")
+
+addElement(secFunnyA, "button", { Title = "Walk on Wall (attempt)", Callback = function() safeNotify({ Title="Criptix", Description="Walk on Wall attempted", Duration=1.2 }) end })
+addElement(secFunnyA, "button", { Title = "Enable Touch Fling (10s)", Callback = function()
+    safeNotify({ Title="Criptix", Description="Touch fling active (10s)", Duration=1 })
+    local mouse = player:GetMouse()
+    local conn
+    conn = mouse.Button1Down:Connect(function()
+        local t = mouse.Target
+        if t then
+            local model = t:FindFirstAncestorOfClass("Model")
+            if model and model ~= player.Character then
+                local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+                local myHrp = player.Character and (player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChildWhichIsA("BasePart"))
+                if hrp and myHrp then
+                    local p = Instance.new("Part", Workspace)
+                    p.Size = Vector3.new(1,1,1); p.Transparency = 1; p.Anchored = false; p.CanCollide = false
+                    p.CFrame = myHrp.CFrame * CFrame.new(0,-2,-1)
+                    p.Velocity = (hrp.Position - myHrp.Position).Unit * 150
+                    task.delay(0.6, function() pcall(function() p:Destroy() end) end)
+                end
             end
-        end },
-        { type = "slider", title = "Spin Speed (1-100)", min = 1, max = 100, default = 20, callback = function(v) _G._Cr_SpinSpeed = math.clamp(tonumber(v) or 20,1,100) end },
-        { type = "toggle", title = "Spin Character", default = false, callback = function(state)
-            if state then
-                _G._Cr_SpinLoop = true
-                spawn(function()
-                    while _G._Cr_SpinLoop do
-                        local ch = player.Character
-                        if ch and ch:FindFirstChild("HumanoidRootPart") then ch.HumanoidRootPart.CFrame = ch.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad((_G._Cr_SpinSpeed or 20)/30), 0) end
-                        task.wait(1/30)
-                    end
-                end)
-            else
-                _G._Cr_SpinLoop = false
-            end
-        end }
-    }
-})
-
--- Misc
-populateTab(win:Tab({ Title = "Misc" }), {
-    sectionName = "For AFK",
-    elements = {
-        { type = "toggle", title = "Anti AFK", default = false, callback = function(v)
-            if v then
-                player.Idled:Connect(function() local vu = game:GetService("VirtualUser"); vu:CaptureController(); vu:ClickButton2(Vector2.new()) end)
-            end
-        end },
-        { type = "button", title = "Darken Game", callback = function() for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("Texture") or o:IsA("Decal") then pcall(function() o.Transparency = 1 end) end end; safeNotify({Title="Criptix", Description="Game darkened", Duration=1.2}) end },
-        { type = "button", title = "FPS Boost", callback = function() for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("BasePart") then pcall(function() o.Material = Enum.Material.SmoothPlastic end) end end; safeNotify({Title="Criptix", Description="FPS Boost applied", Duration=1.2}) end }
-    }
-})
--- Server buttons on same tab but different section name
-populateTab(win:Tab({ Title = "Servers" }), {
-    sectionName = "Server",
-    elements = {
-        { type = "button", title = "Server Hop", callback = function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end },
-        { type = "button", title = "Rejoin Server", callback = function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end }
-    }
-})
-
--- Settings
-populateTab(win:Tab({ Title = "Settings" }), {
-    sectionName = "General",
-    elements = {
-        { type = "button", title = "Save Settings", callback = function() safeNotify({Title="Criptix", Description="Settings saved (not persisted)", Duration=1}) end },
-        { type = "button", title = "Load Settings", callback = function() safeNotify({Title="Criptix", Description="Settings loaded (not persisted)", Duration=1}) end },
-        { type = "button", title = "Reset To Default", callback = function() safeNotify({Title="Criptix", Description="Defaults applied", Duration=1}) end }
-    }
-})
-
--- Settings UI
-populateTab(win:Tab({ Title = "Settings UI" }), {
-    sectionName = "Appearance",
-    elements = {
-        { type = "dropdown", title = "Change Theme", values = {"Dark","Light","Ocean","Inferno"}, callback = function(choice) if choice and ui.SetTheme then pcall(function() ui:SetTheme(choice) end) end; safeNotify({Title="Criptix", Description="Theme: "..tostring(choice), Duration=1}) end },
-        { type = "keybind", title = "Toggle UI Keybind", default = Enum.KeyCode.RightControl, callback = function() if win and win.Toggle then pcall(function() win:Toggle() end) end end },
-        { type = "slider", title = "Transparency (0-0.8)", min = 0, max = 0.8, default = 0.5, callback = function(v) if win and win.SetTransparency then pcall(function() win:SetTransparency(v) end) end; safeNotify({Title="Criptix", Description="Transparency: "..tostring(v), Duration=1}) end }
-    }
-})
-
--- Floating button (draggable) to toggle GUI
-pcall(function()
-    local sg = Instance.new("ScreenGui"); sg.Name="CriptixHub_Button"; sg.ResetOnSpawn=false; sg.Parent=playerGui
-    local frame = Instance.new("Frame"); frame.Size=UDim2.new(0,70,0,70); frame.Position=UDim2.new(0.85,0,0.06,0); frame.BackgroundTransparency=1; frame.Parent=sg
-    local btn = Instance.new("ImageButton"); btn.Size=UDim2.fromOffset(60,60); btn.Position=UDim2.new(0.5,0,0.5,0); btn.AnchorPoint=Vector2.new(0.5,0.5); btn.BackgroundColor3=Color3.fromRGB(20,20,20); btn.BorderSizePixel=0; btn.Image=""; btn.Parent=frame
-    local uic = Instance.new("UICorner", btn); uic.CornerRadius=UDim.new(0,16)
-    local stroke = Instance.new("UIStroke", btn); stroke.Thickness=2; stroke.Color=Color3.fromRGB(68,196,255); stroke.Transparency=0.6
-    local lbl = Instance.new("TextLabel", frame); lbl.Size=UDim2.new(1,0,0,16); lbl.Position=UDim2.new(0,0,1,2); lbl.BackgroundTransparency=1; lbl.Text="Criptix"; lbl.TextSize=12; lbl.TextColor3=Color3.fromRGB(200,200,200); lbl.Font=Enum.Font.SourceSans
-    -- dragging
-    local dragging=false; local dragStart; local startPos; local dragInput
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-            dragging=true; dragStart=input.Position; startPos=frame.Position
-            input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
         end
     end)
-    btn.InputChanged:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then dragInput=input end end)
-    UserInputService.InputChanged:Connect(function(input) if dragging and input==dragInput then local delta = input.Position - dragStart; frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y) end end)
-    btn.MouseButton1Click:Connect(function() pcall(function() if win and win.Toggle then win:Toggle() elseif win and win.Open then win:Open() end end) end)
-end)
+    task.delay(10, function() if conn then conn:Disconnect() end; safeNotify({ Title="Criptix", Description="Fling disabled", Duration=1 }) end)
+end })
+addElement(secFunnyB, "toggle", { Title = "Rainbow Body", Default = false, Callback = function(state)
+    if state then
+        _G._Cr_Rain = RunService.Heartbeat:Connect(function()
+            local ch = player.Character
+            if ch then
+                local hue = (tick() % 5) / 5
+                local col = Color3.fromHSV(hue, 0.8, 1)
+                for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end end
+            end
+        end)
+        safeNotify({ Title="Criptix", Description="Rainbow enabled", Duration=1 })
+    else
+        if _G._Cr_Rain then _G._Cr_Rain:Disconnect(); _G._Cr_Rain = nil end
+        safeNotify({ Title="Criptix", Description="Rainbow disabled", Duration=1 })
+    end
+end })
+addElement(secFunnyB, "slider", { Title = "Spin Speed (1-100)", Min = 1, Max = 100, Default = 20, Callback = function(v) _G._Cr_SpinSpeed = math.clamp(tonumber(v) or 20, 1, 100) end })
+addElement(secFunnyB, "toggle", { Title = "Spin Character", Default = false, Callback = function(state)
+    if state then
+        _G._Cr_SpinLoop = true
+        spawn(function()
+            while _G._Cr_SpinLoop do
+                local ch = player.Character
+                if ch and ch:FindFirstChild("HumanoidRootPart") then
+                    ch.HumanoidRootPart.CFrame = ch.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad((_G._Cr_SpinSpeed or 20)/30), 0)
+                end
+                task.wait(1/30)
+            end
+        end)
+        safeNotify({ Title="Criptix", Description="Spinning on", Duration=1 })
+    else
+        _G._Cr_SpinLoop = false
+        safeNotify({ Title="Criptix", Description="Spinning off", Duration=1 })
+    end
+end })
 
--- finalize
-hideLoading()
-safeNotify({Title="Criptix", Description="v1.6.5 loaded", Duration=2})
+forceSelect(tabFunny)
 
--- reapply on respawn
+-- =========================
+-- MISC (move Servers here)
+-- =========================
+local secMiscAFK = makeSection(tabMisc, "For AFK")
+local secMiscServer = makeSection(tabMisc, "Server")
+
+addElement(secMiscAFK, "toggle", { Title = "Anti AFK", Default = false, Callback = function(v)
+    if v then
+        player.Idled:Connect(function() local vu = game:GetService("VirtualUser"); vu:CaptureController(); vu:ClickButton2(Vector2.new()) end)
+        safeNotify({ Title="Criptix", Description="Anti AFK enabled", Duration=1 })
+    else
+        safeNotify({ Title="Criptix", Description="Anti AFK disabled", Duration=1 })
+    end
+end })
+addElement(secMiscAFK, "button", { Title = "Darken Game", Callback = function()
+    for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("Texture") or o:IsA("Decal") then pcall(function() o.Transparency = 1 end) end end
+    safeNotify({ Title="Criptix", Description="Game darkened", Duration=1 })
+end })
+addElement(secMiscAFK, "button", { Title = "FPS Boost", Callback = function()
+    for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("BasePart") then pcall(function() o.Material = Enum.Material.SmoothPlastic end) end end
+    safeNotify({ Title="Criptix", Description="FPS Boost applied", Duration=1 })
+end })
+
+-- servers (moved to misc)
+addElement(secMiscServer, "button", { Title = "Server Hop", Callback = function()
+    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+end })
+addElement(secMiscServer, "button", { Title = "Rejoin Server", Callback = function()
+    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+end })
+
+forceSelect(tabMisc)
+
+-- =========================
+-- Settings (save/load placeholders)
+-- =========================
+local secSettingsMain = makeSection(tabSettings, "General")
+addElement(secSettingsMain, "button", { Title = "Save Settings", Callback = function() safeNotify({ Title="Criptix", Description="Settings saved (not persisted)", Duration=1 }) end })
+addElement(secSettingsMain, "button", { Title = "Load Settings", Callback = function() safeNotify({ Title="Criptix", Description="Settings loaded (not persisted)", Duration=1 }) end })
+addElement(secSettingsMain, "button", { Title = "Reset To Default", Callback = function() safeNotify({ Title="Criptix", Description="Defaults applied", Duration=1 }) end })
+forceSelect(tabSettings)
+
+-- =========================
+-- Settings UI: Theme + Keybind + Transparency
+-- =========================
+local secSUIAppear = makeSection(tabSUI, "Appearance")
+
+addElement(secSUIAppear, "dropdown", { Title = "Change Theme", Values = {"Dark","Light","Ocean","Inferno"}, Callback = function(choice)
+    local okA = pcall(function() if ui.SetTheme then ui:SetTheme(choice) end end)
+    local okB = pcall(function() if win.SetTheme then win:SetTheme(choice) end end)
+    if okA or okB then safeNotify({ Title="Criptix", Description="Theme set: "..tostring(choice), Duration=1 }) else safeNotify({ Title="Criptix", Description="Theme change failed for this WindUI variant", Duration=2 }) end
+end })
+
+addElement(secSUIAppear, "keybind", { Title = "Toggle UI Keybind", Default = Enum.KeyCode.RightControl, Callback = function()
+    if win and win.Toggle then pcall(function() win:Toggle() end) end
+end })
+
+-- Transparency slider with decimal (0.0 - 0.8)
+addElement(secSUIAppear, "slider", { Title = "Transparency (0.0 - 0.8)", Min = 0, Max = 0.8, Default = 0.5, Callback = function(v)
+    -- some WindUI require SetTransparency on window, others on ui
+    pcall(function() if win.SetTransparency then win:SetTransparency(tonumber(v) or 0.5) end end)
+    pcall(function() if ui.SetTransparency then ui:SetTransparency(tonumber(v) or 0.5) end end)
+    safeNotify({ Title="Criptix", Description="Transparency: "..tostring(v), Duration=1 })
+end })
+
+forceSelect(tabSUI)
+
+-- -------------------------
+-- Finalize: hide loading overlay
+-- -------------------------
+hideLoadingOverlay()
+safeNotify({ Title="Criptix", Description="v1.6.6 loaded", Duration=2 })
+
+-- Reapply on respawn
 player.CharacterAdded:Connect(function()
     task.wait(0.6)
-    if _G._Cr_WalkEnabled then local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then pcall(function() hum.WalkSpeed = _G._Cr_WalkSpeed end) end end
-    if _G._Cr_JumpEnabled then local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then pcall(function() hum.JumpPower = _G._Cr_JumpPower end) end end
+    if _G._Cr_WalkEnabled then local hum = getHumanoid(); if hum then pcall(function() hum.WalkSpeed = _G._Cr_WalkSpeed end) end end
+    if _G._Cr_JumpEnabled then local hum = getHumanoid(); if hum then pcall(function() hum.JumpPower = _G._Cr_JumpPower end) end end
     if _G._Cr_NoclipConn then
-        if _G._Cr_NoclipConn then _G._Cr_NoclipConn:Disconnect(); _G._Cr_NoclipConn=nil end
-        _G._Cr_NoclipConn = RunService.Stepped:Connect(function() local ch = player.Character; if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end end end)
+        if _G._Cr_NoclipConn then _G._Cr_NoclipConn:Disconnect(); _G._Cr_NoclipConn = nil end
+        _G._Cr_NoclipConn = RunService.Stepped:Connect(function() local ch = player.Character; if ch then for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)
     end
 end)
