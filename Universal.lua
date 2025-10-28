@@ -4,26 +4,59 @@
 --// Description: Universal hub, performance improved
 --// Compatible: PC + Mobile
 
---// Cargar WindUI
-local ui = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+-- DIAGNOSTIC A: detect ScreenGui creado durante CreateWindow
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
---// Crear ventana principal
-local win = ui:CreateWindow({
-    Title = "Criptix Hub | v1.4.1 🌐",
-    Icon = "",
-    Author = "Criptix",
-    Folder = "CriptixHub",
-    Size = UDim2.fromOffset(750, 400),
-    Transparent = true,
-    Theme = "Dark",
-    Resizable = true,
-    SideBarWidth = 200,
-    Background = "",
-    BackgroundImageTransparency = 0.4,
-    HideSearchBar = true,
-    ScrollBarEnabled = true,
-    User = { Enabled = false, Anonymous = false }
-})
+print("== DIAGNOSTIC A: starting childadded watcher ==")
+
+local addedLogs = {}
+local conn
+conn = playerGui.ChildAdded:Connect(function(child)
+    if child:IsA("ScreenGui") then
+        local info = string.format("[ChildAdded] %s (desc %d)", child.Name, #child:GetDescendants())
+        table.insert(addedLogs, info)
+        print(info)
+        -- also list first-level children
+        for i,c in ipairs(child:GetChildren()) do
+            print("   child", i, c.Name, c.ClassName)
+        end
+    end
+end)
+
+-- Now load WindUI and create window (original code)
+local ok, ui = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+end)
+print("-> WindUI load ok?", ok, type(ui))
+
+local winOk, win = pcall(function()
+    return ui and ui.CreateWindow and ui:CreateWindow({
+        Title = "Criptix Hub DIAG",
+        User = { Enabled = false }
+    })
+end)
+print("-> CreateWindow ok?", winOk, type(win))
+
+-- wait a couple seconds to let WindUI mount
+task.wait(2)
+
+-- print collected logs
+print("=== ChildAdded log ===")
+for i,v in ipairs(addedLogs) do print(i, v) end
+
+-- show all ScreenGuis currently in PlayerGui
+print("=== Current ScreenGuis ===")
+for i,g in ipairs(playerGui:GetChildren()) do
+    if g:IsA("ScreenGui") then
+        print(i, "ScreenGui:", g.Name, "#desc:", #g:GetDescendants())
+    end
+end
+
+-- disconnect watcher
+if conn then conn:Disconnect() end
+print("== DIAGNOSTIC A: done ==")
 
 --// Crear Tabs principales
 local Tabs = {
@@ -276,3 +309,4 @@ end)
 --// ✅ Final
 ---------------------------------------------------------------------
 ui:Notify("Criptix Hub v1.4.1 fully loaded successfully!")
+
