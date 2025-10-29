@@ -1,10 +1,9 @@
--- Criptix Hub Universal | v1.4.0
--- Single-file LocalScript (no external WindUI dependency)
--- Integrated: lightweight WindUI-like engine, Animation Engine, Dock System, Command engine, Mods loader
+-- Criptix Hub Universal | v1.4.0.2
+-- Final Stable (WindUI-like integrated, Animation Engine fade-in, Dock System static)
 -- Author: Freddy Bear + assistant
--- Usage: paste into StarterGui as LocalScript or host raw and call with loadstring(HttpGet(...))()
+-- Paste this entire file as `Universal.lua` in your GitHub repo.
 
--- ===== Services & basic utilities =====
+-- ===== Services & utilities =====
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -12,28 +11,29 @@ local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Workspace = game:GetService("Workspace")
-local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local function safe_pcall(fn, ...)
     local ok, res = pcall(fn, ...)
-    if not ok then
-        warn("[CriptixHub] Error:", res)
-    end
+    if not ok then warn("[CriptixHub] Error:", res) end
     return ok, res
 end
 
-local function clamp(v, a, b) v = tonumber(v) or a; if v < a then return a elseif v > b then return b else return v end end
-local function deepcopy(t)
-    if type(t) ~= "table" then return t end
-    local s = {}
-    for k,v in pairs(t) do s[deepcopy(k)] = deepcopy(v) end
-    return s
+local function clamp(v, a, b)
+    v = tonumber(v) or a
+    if v < a then return a elseif v > b then return b else return v end
 end
 
--- ===== Animation Engine (helper) =====
+local function deepcopy(t)
+    if type(t) ~= "table" then return t end
+    local out = {}
+    for k,v in pairs(t) do out[deepcopy(k)] = deepcopy(v) end
+    return out
+end
+
+-- ===== Animation Engine (helpers) =====
 local Anim = {}
 Anim.Tween = function(obj, props, time, style, direction, onComplete)
     local info = TweenInfo.new(time or 0.18, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out)
@@ -42,43 +42,53 @@ Anim.Tween = function(obj, props, time, style, direction, onComplete)
     if onComplete then tw.Completed:Connect(onComplete) end
     return tw
 end
-Anim.Fade = function(obj, goal, t) Anim.Tween(obj, {BackgroundTransparency = goal}, t or 0.18) end
-Anim.Prop = function(obj, propTable, t) Anim.Tween(obj, propTable, t or 0.18) end
+Anim.FadeIn = function(obj, time)
+    if obj then
+        obj.BackgroundTransparency = 1
+        Anim.Tween(obj, {BackgroundTransparency = 0}, time or 0.25)
+    end
+end
+Anim.FadeOut = function(obj, time)
+    if obj then
+        Anim.Tween(obj, {BackgroundTransparency = 1}, time or 0.18)
+    end
+end
+Anim.Prop = function(obj, props, time) return Anim.Tween(obj, props, time) end
 
--- ===== Lightweight UI engine (WindUI-like minimal) =====
+-- ===== Lightweight WindUI-like engine =====
 local UI = {}
 UI.__index = UI
 
 function UI:CreateWindow(opts)
-    -- opts: Title, Size (UDim2), Transparent (bool), Theme (string), SideBarWidth (number)
+    opts = opts or {}
     local Win = {}
-    Win._opts = opts or {}
+    Win._opts = opts
     Win._tabs = {}
     Win._visible = false
     Win._theme = opts.Theme or "Dark"
-    Win._size = opts.Size or UDim2.fromOffset(800,480)
+    Win._size = opts.Size or UDim2.fromOffset(880,520)
     Win._side = opts.SideBarWidth or 200
 
     -- ScreenGui
     local sg = Instance.new("ScreenGui")
     sg.Name = "CriptixHub_SG"
     sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
     sg.Parent = playerGui
     Win._sg = sg
 
-    -- Main frame
+    -- Main frame (centered)
     local frame = Instance.new("Frame")
     frame.Name = "Window"
     frame.Size = Win._size
-    frame.Position = UDim2.new(0.5, -(Win._size.X.Offset/2), 0.5, -(Win._size.Y.Offset/2))
     frame.AnchorPoint = Vector2.new(0.5,0.5)
+    frame.Position = UDim2.new(0.5, 0, 0.5, 0)
     frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
     frame.BorderSizePixel = 0
+    frame.Visible = false
     frame.Parent = sg
-    frame.ZIndex = 2
     Win._frame = frame
 
-    -- UICorner
     local corner = Instance.new("UICorner", frame)
     corner.CornerRadius = UDim.new(0,12)
 
@@ -94,17 +104,17 @@ function UI:CreateWindow(opts)
     title.Text = opts.Title or "Criptix Hub"
     title.TextColor3 = Color3.fromRGB(240,240,240)
     title.BackgroundTransparency = 1
-    title.Font = Enum.Font.SFCompactSemibold
+    title.Font = Enum.Font.SourceSansSemibold
     title.TextSize = 18
     title.Size = UDim2.new(0.6,0,1,0)
     title.Position = UDim2.new(0.02,0,0,0)
     title.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Minimize & Close buttons
+    -- Close & Minimize buttons
     local btnClose = Instance.new("TextButton", top)
+    btnClose.Name = "Close"
     btnClose.Size = UDim2.new(0,30,0,24)
     btnClose.Position = UDim2.new(1,-38,0.5,-12)
-    btnClose.AnchorPoint = Vector2.new(0,0)
     btnClose.Text = "✕"
     btnClose.TextColor3 = Color3.fromRGB(220,220,220)
     btnClose.BackgroundTransparency = 1
@@ -112,6 +122,7 @@ function UI:CreateWindow(opts)
     btnClose.TextSize = 18
 
     local btnMin = Instance.new("TextButton", top)
+    btnMin.Name = "Min"
     btnMin.Size = UDim2.new(0,30,0,24)
     btnMin.Position = UDim2.new(1,-74,0.5,-12)
     btnMin.Text = "—"
@@ -120,7 +131,7 @@ function UI:CreateWindow(opts)
     btnMin.Font = Enum.Font.SourceSansBold
     btnMin.TextSize = 18
 
-    -- Sidebar
+    -- Sidebar (tabs)
     local sidebar = Instance.new("Frame", frame)
     sidebar.Name = "Sidebar"
     sidebar.Size = UDim2.new(0, Win._side, 1, -36)
@@ -133,29 +144,30 @@ function UI:CreateWindow(opts)
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
+    -- Content area
     local content = Instance.new("Frame", frame)
     content.Name = "Content"
-    content.Size = UDim2.new(1, -Win._side - 14, 1, -46)
+    content.Size = UDim2.new(1, -Win._side - 16, 1, -46)
     content.Position = UDim2.new(0, Win._side + 8, 0, 38)
     content.BackgroundTransparency = 1
 
     local contentLayout = Instance.new("UIListLayout", content)
     contentLayout.Padding = UDim.new(0,6)
     contentLayout.FillDirection = Enum.FillDirection.Vertical
-    contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    -- make methods
+    -- Methods
     function Win:Tab(o)
-        -- o.Title
+        o = o or {}
         local tabBtn = Instance.new("TextButton", sidebar)
         tabBtn.Size = UDim2.new(1, -20, 0, 34)
         tabBtn.Text = " "..(o.Title or "Tab")
         tabBtn.TextColor3 = Color3.fromRGB(220,220,220)
         tabBtn.BackgroundTransparency = 0.8
         tabBtn.BackgroundColor3 = Color3.fromRGB(22,22,22)
-        tabBtn.Font = Enum.Font.SFCompactSemibold
+        tabBtn.Font = Enum.Font.SourceSansSemibold
         tabBtn.TextSize = 15
+        tabBtn.AutoButtonColor = true
         local uic = Instance.new("UICorner", tabBtn); uic.CornerRadius = UDim.new(0,8)
 
         local tabFrame = Instance.new("Frame", content)
@@ -167,15 +179,15 @@ function UI:CreateWindow(opts)
         local tab = { _btn = tabBtn, _frame = tabFrame, _sections = {} }
 
         function tab:Select()
-            -- hide others
             for _,t in ipairs(Win._tabs) do t._frame.Visible = false end
             tabFrame.Visible = true
+            -- visual feedback
             Anim.Prop(tabBtn, {BackgroundTransparency = 0.4}, 0.12)
         end
 
         tabBtn.MouseButton1Click:Connect(function() tab:Select() end)
 
-        -- API: Divider, Section, Paragraph, Button, Toggle, Slider, Input, Dropdown, Keybind
+        -- Elements API (Divider, Section, Paragraph, Button, Toggle, Slider, Input, Dropdown, Keybind)
         function tab:Divider()
             local d = Instance.new("Frame", tabFrame)
             d.Size = UDim2.new(1,0,0,2)
@@ -188,17 +200,19 @@ function UI:CreateWindow(opts)
         function tab:Section(opts)
             opts = opts or {}
             local sec = Instance.new("Frame", tabFrame)
-            sec.Size = UDim2.new(1, -10, 0, 80)
+            sec.Size = UDim2.new(1, -10, 0, 60)
             sec.BackgroundTransparency = 1
+            sec.LayoutOrder = #tab._sections + 1
             local title = Instance.new("TextLabel", sec)
             title.Size = UDim2.new(1,0,0,20)
             title.Position = UDim2.new(0,0,0,0)
             title.BackgroundTransparency = 1
             title.Text = tostring(opts.Title or "")
-            title.Font = Enum.Font.SFCompactSemibold
+            title.Font = Enum.Font.SourceSansSemibold
             title.TextColor3 = Color3.fromRGB(220,220,220)
             title.TextSize = opts.TextSize or 16
             title.TextXAlignment = Enum.TextXAlignment.Center
+            table.insert(tab._sections, sec)
             return sec
         end
 
@@ -207,12 +221,13 @@ function UI:CreateWindow(opts)
             local p = Instance.new("Frame", tabFrame)
             p.Size = UDim2.new(1,-10,0,64)
             p.BackgroundTransparency = 1
+            p.LayoutOrder = #tab._sections + 1
             local t = Instance.new("TextLabel", p)
             t.Size = UDim2.new(1,0,0,20)
             t.Position = UDim2.new(0,0,0,0)
             t.BackgroundTransparency = 1
             t.Text = tostring(opts.Title or "")
-            t.Font = Enum.Font.SFCompactSemibold
+            t.Font = Enum.Font.SourceSansSemibold
             t.TextColor3 = Color3.fromRGB(240,240,240)
             t.TextSize = 14
             t.TextXAlignment = Enum.TextXAlignment.Left
@@ -231,18 +246,17 @@ function UI:CreateWindow(opts)
         end
 
         function tab:Button(opts)
+            opts = opts or {}
             local btn = Instance.new("TextButton", tabFrame)
             btn.Size = UDim2.new(0,160,0,34)
             btn.Text = tostring(opts.Title or "Button")
-            btn.Font = Enum.Font.SFCompactSemibold
+            btn.Font = Enum.Font.SourceSansSemibold
             btn.TextSize = 14
             btn.TextColor3 = Color3.fromRGB(240,240,240)
             btn.BackgroundColor3 = Color3.fromRGB(28,28,28)
             btn.BorderSizePixel = 0
             local u = Instance.new("UICorner", btn); u.CornerRadius = UDim.new(0,8)
-            if opts.Desc then
-                btn.ToolTip = opts.Desc
-            end
+            if opts.Desc then btn.ToolTip = opts.Desc end
             btn.MouseButton1Click:Connect(function()
                 safe_pcall(function() if opts.Callback then opts.Callback() end end)
             end)
@@ -250,11 +264,13 @@ function UI:CreateWindow(opts)
         end
 
         function tab:Toggle(opts)
+            opts = opts or {}
             local frame = Instance.new("Frame", tabFrame)
-            frame.Size = UDim2.new(0,180,0,28)
+            frame.Size = UDim2.new(0,220,0,28)
             frame.BackgroundTransparency = 1
+            frame.LayoutOrder = #tab._sections + 1
             local label = Instance.new("TextLabel", frame)
-            label.Size = UDim2.new(0,110,1,0)
+            label.Size = UDim2.new(0,130,1,0)
             label.Position = UDim2.new(0,0,0,0)
             label.BackgroundTransparency = 1
             label.Text = tostring(opts.Title or "Toggle")
@@ -262,10 +278,10 @@ function UI:CreateWindow(opts)
             label.TextSize = 14
             label.TextColor3 = Color3.fromRGB(220,220,220)
             local btn = Instance.new("TextButton", frame)
-            btn.Size = UDim2.new(0,48,0,20)
-            btn.Position = UDim2.new(1,-50,0.5,-10)
+            btn.Size = UDim2.new(0,60,0,22)
+            btn.Position = UDim2.new(1,-66,0.5,-11)
             btn.Text = opts.Default and "ON" or "OFF"
-            btn.Font = Enum.Font.SFCompactSemibold
+            btn.Font = Enum.Font.SourceSansSemibold
             btn.TextSize = 12
             btn.BackgroundColor3 = opts.Default and Color3.fromRGB(60,160,80) or Color3.fromRGB(70,70,70)
             btn.TextColor3 = Color3.fromRGB(240,240,240)
@@ -280,35 +296,30 @@ function UI:CreateWindow(opts)
         end
 
         function tab:Slider(title, min, max, default, callback)
-            -- slider with value label and +/- fallback
             min = tonumber(min) or 0; max = tonumber(max) or 100; default = tonumber(default) or min
             local container = Instance.new("Frame", tabFrame)
             container.Size = UDim2.new(0,360,0,36)
             container.BackgroundTransparency = 1
+            container.LayoutOrder = #tab._sections + 1
+
             local lbl = Instance.new("TextLabel", container)
-            lbl.Size = UDim2.new(0,180,1,0)
-            lbl.Position = UDim2.new(0,0,0,0)
-            lbl.BackgroundTransparency = 1
-            lbl.Text = tostring(title or "Slider")
-            lbl.Font = Enum.Font.SourceSans
-            lbl.TextSize = 14
-            lbl.TextColor3 = Color3.fromRGB(220,220,220)
+            lbl.Size = UDim2.new(0,180,1,0); lbl.Position = UDim2.new(0,0,0,0)
+            lbl.BackgroundTransparency = 1; lbl.Text = tostring(title or "Slider")
+            lbl.Font = Enum.Font.SourceSans; lbl.TextSize = 14; lbl.TextColor3 = Color3.fromRGB(220,220,220)
+
             local valLbl = Instance.new("TextLabel", container)
-            valLbl.Size = UDim2.new(0,80,1,0)
-            valLbl.Position = UDim2.new(1,-80,0,0)
-            valLbl.BackgroundTransparency = 1
-            valLbl.Text = tostring(default)
-            valLbl.Font = Enum.Font.SFCompactSemibold
-            valLbl.TextSize = 14
-            valLbl.TextColor3 = Color3.fromRGB(200,200,200)
-            -- plus/minus buttons
+            valLbl.Size = UDim2.new(0,80,1,0); valLbl.Position = UDim2.new(1,-80,0,0)
+            valLbl.BackgroundTransparency = 1; valLbl.Text = tostring(default)
+            valLbl.Font = Enum.Font.SourceSansSemibold; valLbl.TextSize = 14; valLbl.TextColor3 = Color3.fromRGB(200,200,200)
+
+            -- +/- buttons
             local minus = Instance.new("TextButton", container)
             minus.Size = UDim2.new(0,26,0,26); minus.Position = UDim2.new(0.55,-40,0.5,-13)
-            minus.Text = "-" minus.Font = Enum.Font.SourceSansBold minus.TextSize = 18 minus.BackgroundColor3 = Color3.fromRGB(50,50,50) minus.TextColor3 = Color3.fromRGB(240,240,240)
+            minus.Text = "-" ; minus.Font = Enum.Font.SourceSansBold; minus.TextSize = 18; minus.BackgroundColor3 = Color3.fromRGB(50,50,50); minus.TextColor3 = Color3.fromRGB(240,240,240)
             local plus = Instance.new("TextButton", container)
             plus.Size = UDim2.new(0,26,0,26); plus.Position = UDim2.new(0.55,-10,0.5,-13)
-            plus.Text = "+" plus.Font = Enum.Font.SourceSansBold plus.TextSize = 18 plus.BackgroundColor3 = Color3.fromRGB(50,50,50) plus.TextColor3 = Color3.fromRGB(240,240,240)
-            -- value handling
+            plus.Text = "+" ; plus.Font = Enum.Font.SourceSansBold; plus.TextSize = 18; plus.BackgroundColor3 = Color3.fromRGB(50,50,50); plus.TextColor3 = Color3.fromRGB(240,240,240)
+
             local value = tonumber(default)
             local function setVal(v)
                 v = clamp(v, min, max)
@@ -318,16 +329,18 @@ function UI:CreateWindow(opts)
             end
             minus.MouseButton1Click:Connect(function() setVal(value - 1) end)
             plus.MouseButton1Click:Connect(function() setVal(value + 1) end)
-            -- allow clicking on left/right area to set approximate value
+
+            -- click area approximate set
             container.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     local pos = input.Position
                     local absPos = container.AbsolutePosition
-                    local rel = (pos.X - absPos.X) / container.AbsoluteSize.X
+                    local rel = (pos.X - absPos.X) / (container.AbsoluteSize.X)
                     local v = min + (max - min) * rel
                     setVal(v)
                 end
             end)
+
             setVal(default)
             return container
         end
@@ -335,20 +348,16 @@ function UI:CreateWindow(opts)
         function tab:Input(opts)
             opts = opts or {}
             local f = Instance.new("Frame", tabFrame)
-            f.Size = UDim2.new(0,380,0,36)
-            f.BackgroundTransparency = 1
+            f.Size = UDim2.new(0,380,0,36); f.BackgroundTransparency = 1
+            f.LayoutOrder = #tab._sections + 1
             local lbl = Instance.new("TextLabel", f)
             lbl.Size = UDim2.new(0,120,1,0); lbl.BackgroundTransparency = 1; lbl.Text = tostring(opts.Title or "Input"); lbl.Font = Enum.Font.SourceSans; lbl.TextColor3 = Color3.fromRGB(220,220,220)
             local box = Instance.new("TextBox", f)
             box.Size = UDim2.new(0,240,0,28); box.Position = UDim2.new(0,130,0,4)
             box.Text = tostring(opts.Value or "")
             box.PlaceholderText = tostring(opts.Placeholder or "")
-            box.ClearTextOnFocus = false
-            box.Font = Enum.Font.SourceSans
-            box.TextSize = 14
-            box.TextColor3 = Color3.fromRGB(240,240,240)
-            box.BackgroundColor3 = Color3.fromRGB(26,26,26)
-            box.BorderSizePixel = 0
+            box.ClearTextOnFocus = false; box.Font = Enum.Font.SourceSans; box.TextSize = 14; box.TextColor3 = Color3.fromRGB(240,240,240)
+            box.BackgroundColor3 = Color3.fromRGB(26,26,26); box.BorderSizePixel = 0
             local uc = Instance.new("UICorner", box); uc.CornerRadius = UDim.new(0,6)
             box.FocusLost:Connect(function(enter)
                 if enter and opts.Callback then safe_pcall(function() opts.Callback(box.Text) end) end
@@ -359,7 +368,7 @@ function UI:CreateWindow(opts)
         function tab:Dropdown(opts)
             opts = opts or {}
             local frame = Instance.new("Frame", tabFrame)
-            frame.Size = UDim2.new(0,360,0,34); frame.BackgroundTransparency = 1
+            frame.Size = UDim2.new(0,360,0,34); frame.BackgroundTransparency = 1; frame.LayoutOrder = #tab._sections + 1
             local lbl = Instance.new("TextLabel", frame)
             lbl.Size = UDim2.new(0,160,1,0); lbl.BackgroundTransparency = 1; lbl.Text = tostring(opts.Title or "Dropdown"); lbl.Font = Enum.Font.SourceSans; lbl.TextColor3 = Color3.fromRGB(220,220,220)
             local btn = Instance.new("TextButton", frame)
@@ -393,7 +402,7 @@ function UI:CreateWindow(opts)
 
         function tab:Keybind(opts)
             opts = opts or {}
-            local f = Instance.new("Frame", tabFrame); f.Size = UDim2.new(0,360,0,36); f.BackgroundTransparency = 1
+            local f = Instance.new("Frame", tabFrame); f.Size = UDim2.new(0,360,0,36); f.BackgroundTransparency = 1; f.LayoutOrder = #tab._sections + 1
             local lbl = Instance.new("TextLabel", f); lbl.Size = UDim2.new(0,180,1,0); lbl.BackgroundTransparency = 1; lbl.Text = tostring(opts.Title or "Keybind"); lbl.Font = Enum.Font.SourceSans; lbl.TextColor3 = Color3.fromRGB(220,220,220)
             local btn = Instance.new("TextButton", f); btn.Position = UDim2.new(0.6,0,0.12,0); btn.Size = UDim2.new(0,120,0,28); btn.Text = tostring(opts.Default and tostring(opts.Default) or "Set Key")
             btn.MouseButton1Click:Connect(function()
@@ -418,36 +427,42 @@ function UI:CreateWindow(opts)
     function Win:Toggle()
         self._visible = not self._visible
         self._frame.Visible = self._visible
-        -- simple fade
-        if self._visible then Anim.Prop(self._frame, {Position = UDim2.new(0.5, -(self._size.X.Offset/2), 0.5, -(self._size.Y.Offset/2))}, 0.18) end
+        if self._visible then
+            -- fade-in effect
+            self._frame.BackgroundTransparency = 1
+            Anim.Tween(self._frame, {BackgroundTransparency = 0}, 0.22)
+        else
+            Anim.Tween(self._frame, {BackgroundTransparency = 1}, 0.18)
+        end
     end
 
     function Win:SetTheme(name)
         self._theme = name
-        -- minimal theme mapping
         if name == "Dark" then
             self._frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
         elseif name == "Light" then
             self._frame.BackgroundColor3 = Color3.fromRGB(240,240,240)
         elseif name == "Criptix" then
-            self._frame.BackgroundColor3 = Color3.fromRGB(15,15,20)
+            self._frame.BackgroundColor3 = Color3.fromRGB(12,12,18)
+        elseif name == "Inferno" then
+            self._frame.BackgroundColor3 = Color3.fromRGB(32,8,8)
+        elseif name == "Emerald" then
+            self._frame.BackgroundColor3 = Color3.fromRGB(6,32,20)
+        elseif name == "Ocean" then
+            self._frame.BackgroundColor3 = Color3.fromRGB(6,18,28)
         else
             self._frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
         end
     end
 
-    -- close & minimize behavior
-    btnClose.MouseButton1Click:Connect(function()
-        safe_pcall(function() sg:Destroy() end)
-    end)
-    btnMin.MouseButton1Click:Connect(function()
-        Win:Toggle()
-    end)
+    -- close & minimize
+    btnClose.MouseButton1Click:Connect(function() safe_pcall(function() sg:Destroy() end) end)
+    btnMin.MouseButton1Click:Connect(function() Win:Toggle() end)
 
     return Win
 end
 
--- ===== Create the window and tabs =====
+-- ===== Create window & tabs (final) =====
 local win = UI:CreateWindow({ Title = "Criptix Hub Universal | v1.4.0", Size = UDim2.fromOffset(880,520), Theme = "Dark", SideBarWidth = 200 })
 local tabInfo = win:Tab({ Title = "Info" })
 local tabMain = win:Tab({ Title = "Main" })
@@ -458,20 +473,26 @@ local tabSettings = win:Tab({ Title = "Settings" })
 local tabSUI = win:Tab({ Title = "Settings UI" })
 local tabMods = win:Tab({ Title = "Mods" })
 
--- ===== Dock System (floating button) =====
+-- ===== Dock System (static icon 🌐, draggable) =====
 do
-    local sg = Instance.new("ScreenGui"); sg.Name = "CriptixDock"; sg.ResetOnSpawn = false; sg.Parent = playerGui
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "CriptixDock"
+    sg.ResetOnSpawn = false
+    sg.Parent = playerGui
+
     local frame = Instance.new("Frame", sg)
     frame.Name = "Dock"
     frame.Size = UDim2.fromOffset(60,60)
     frame.Position = UDim2.new(0.9,0,0.08,0)
     frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
     frame.BorderSizePixel = 0
-    frame.AnchorPoint = Vector2.new(0,0)
     local uc = Instance.new("UICorner", frame); uc.CornerRadius = UDim.new(0,14)
+
     local txt = Instance.new("TextLabel", frame)
-    txt.Size = UDim2.new(1,0,1,0); txt.BackgroundTransparency = 1; txt.Text = "🌐"; txt.Font = Enum.Font.Cartoon; txt.TextSize = 28; txt.TextColor3 = Color3.fromRGB(180,220,255)
-    -- draggable
+    txt.Size = UDim2.new(1,0,1,0); txt.BackgroundTransparency = 1; txt.Text = "🌐"
+    txt.Font = Enum.Font.Cartoon; txt.TextSize = 28; txt.TextColor3 = Color3.fromRGB(180,220,255)
+
+    -- draggable support
     local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -483,21 +504,32 @@ do
             end)
         end
     end)
-    frame.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
     UserInputService.InputChanged:Connect(function(input)
         if dragging and input == dragInput then
             local delta = input.Position - dragStart
             frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-    -- click to toggle window
-    frame.MouseButton1Click = nil -- some executors require actual button
-    local btn = Instance.new("TextButton", frame)
-    btn.Size = UDim2.new(1,0,1,0); btn.BackgroundTransparency = 1; btn.Text = ""; btn.AutoButtonColor = false
-    btn.MouseButton1Click:Connect(function() if win and win.Toggle then pcall(function() win:Toggle() end) end end)
+
+    -- use a transparent TextButton to receive clicks reliably
+    local clicker = Instance.new("TextButton", frame)
+    clicker.Size = UDim2.new(1,0,1,0)
+    clicker.BackgroundTransparency = 1
+    clicker.Text = ""
+    clicker.AutoButtonColor = false
+    clicker.MouseButton1Click:Connect(function()
+        if win and win.Toggle then
+            safe_pcall(function() win:Toggle() end)
+        end
+    end)
 end
 
--- ===== Command engine & Mods table =====
+-- ===== Command engine & Mods =====
 local Commands = {}
 local Mods = {}
 
@@ -521,7 +553,7 @@ local function RunCommandLine(line)
     return false
 end
 
--- ===== Build Info Tab (based on Dad.lua style) =====
+-- ===== Info tab (Dad.lua style) =====
 do
     tabInfo:Divider()
     tabInfo:Section({ Title = "Developers", TextXAlignment = "Center", TextSize = 17 })
@@ -545,7 +577,7 @@ do
     local filesDropdown = tabInfo:Dropdown({ Title = "Select Config File", Multi = false, AllowNone = true, Values = {}, Value = "", Callback = function(file) _G.Criptix_ConfigName = file end })
 
     tabInfo:Button({ Title = "Save Config", Desc = "Save current UI config", Callback = function()
-        local cfg = {} -- collect some settings
+        local cfg = {}
         cfg.Theme = win._theme
         cfg.Version = "v1.4.0"
         local ok, enc = pcall(function() return HttpService:JSONEncode(cfg) end)
@@ -604,23 +636,26 @@ do
     end
 end
 
--- ===== Build Main Tab =====
+-- ===== Main tab =====
 do
     tabMain:Divider()
     tabMain:Section({ Title = "Basic", TextXAlignment = "Center", TextSize = 17 })
     tabMain:Divider()
-    -- Walk Speed
-    local function setWalk(v) local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h.WalkSpeed = tonumber(v) or 16 end) end end
+
+    local function setWalk(v)
+        local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if h then pcall(function() h.WalkSpeed = tonumber(v) or 16 end) end
+    end
     tabMain:Paragraph({ Title = "Walk Speed", Desc = "Adjust walking speed (16-200)" })
     tabMain:Slider("Walk Speed", 16, 200, 32, function(v) setWalk(v) end)
-    -- Jump Power
+
     tabMain:Paragraph({ Title = "Jump Power", Desc = "Adjust jump power (50-500)" })
     tabMain:Slider("Jump Power", 50, 500, 50, function(v) local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h.JumpPower = tonumber(v) or 50 end) end end)
 
     tabMain:Divider()
     tabMain:Section({ Title = "Advanced", TextXAlignment = "Center", TextSize = 17 })
     tabMain:Divider()
-    -- Fly toggle & speed
+
     _G._Cr_FlySpeed = 50
     tabMain:Toggle({ Title = "Fly", Default = false, Callback = function(s)
         _G._Cr_FlyOn = s
@@ -648,6 +683,7 @@ do
             pcall(function() if _G._Cr_FlyBG then _G._Cr_FlyBG:Destroy() end end)
         end
     end })
+
     tabMain:Slider("Fly Speed", 16, 200, 50, function(v) _G._Cr_FlySpeed = tonumber(v) or 50 end)
 
     tabMain:Toggle({ Title = "No Clip", Default = false, Callback = function(s)
@@ -674,7 +710,7 @@ do
     end })
 end
 
--- ===== Funny Tab =====
+-- ===== Funny tab =====
 do
     tabFunny:Divider()
     tabFunny:Section({ Title = ":)", TextXAlignment = "Center", TextSize = 17 })
@@ -709,7 +745,15 @@ do
         if s then
             _G._Cr_RainConn = RunService.Heartbeat:Connect(function()
                 local ch = player.Character
-                if ch then local hue = (tick()%5)/5; local col = Color3.fromHSV(hue,0.8,1); for _,p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Color = col end end end
+                if ch then
+                    local hue = (tick()%5)/5
+                    local col = Color3.fromHSV(hue,0.8,1)
+                    for _,p in ipairs(ch:GetDescendants()) do
+                        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                            p.Color = col
+                        end
+                    end
+                end
             end)
         else
             if _G._Cr_RainConn then _G._Cr_RainConn:Disconnect(); _G._Cr_RainConn = nil end
@@ -723,7 +767,9 @@ do
             spawn(function()
                 while _G._Cr_SpinLoop do
                     local ch = player.Character
-                    if ch and ch:FindFirstChild("HumanoidRootPart") then ch.HumanoidRootPart.CFrame = ch.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad((_G._Cr_SpinSpeed or 20)/30), 0) end
+                    if ch and ch:FindFirstChild("HumanoidRootPart") then
+                        ch.HumanoidRootPart.CFrame = ch.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad((_G._Cr_SpinSpeed or 20)/30), 0)
+                    end
                     task.wait(1/30)
                 end
             end)
@@ -747,7 +793,7 @@ do
     end })
 end
 
--- ===== Misc Tab =====
+-- ===== Misc tab =====
 do
     tabMisc:Divider()
     tabMisc:Section({ Title = "For AFK", TextXAlignment = "Center", TextSize = 17 })
@@ -757,9 +803,11 @@ do
     end })
     tabMisc:Button({ Title = "FPS Boost", Desc = "Set BaseParts to SmoothPlastic", Callback = function()
         for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("BasePart") then pcall(function() o.Material = Enum.Material.SmoothPlastic end) end end
+        warn("[Criptix] FPS Boost applied")
     end })
     tabMisc:Button({ Title = "Darken Game", Desc = "Hide decals/textures", Callback = function()
         for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("Decal") or o:IsA("Texture") then pcall(function() o.Transparency = 1 end) end end
+        warn("[Criptix] Darken applied")
     end })
 
     tabMisc:Divider()
@@ -769,7 +817,7 @@ do
     tabMisc:Button({ Title = "Rejoin Server", Desc = "Rejoin same server", Callback = function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end })
 end
 
--- ===== More Commands Tab (visual list) =====
+-- ===== More Commands tab =====
 do
     tabMore:Divider()
     tabMore:Section({ Title = "Commands", TextXAlignment = "Center", TextSize = 17 })
@@ -794,7 +842,7 @@ do
     addCommandEntry("spin", "Spin player", "spin 30")
 end
 
--- ===== Register core command functions =====
+-- ===== Register core commands =====
 RegisterCommand("speed", "Change WalkSpeed", function(args)
     local v = tonumber(args[2]) or 16
     local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
@@ -835,20 +883,47 @@ RegisterCommand("god", "Toggle god mode", function()
     end
 end)
 
-RegisterCommand("fpsboost", "Apply FPS boost", function() for _,o in ipairs(Workspace:GetDescendants()) do if o:IsA("BasePart") then pcall(function() o.Material = Enum.Material.SmoothPlastic end) end end end)
-RegisterCommand("antiafk", "Enable anti AFK", function() player.Idled:Connect(function() local vu = game:GetService("VirtualUser"); vu:CaptureController(); vu:ClickButton2(Vector2.new()) end) end)
-RegisterCommand("serverhop", "Server hop", function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end)
-RegisterCommand("rejoin", "Rejoin", function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end)
-RegisterCommand("fling", "Client fling helper", function() warn("Use the Funny tab fling button for interactive fling") end)
-RegisterCommand("rainbow", "Toggle Rainbow", function() _G._Cr_RainToggle = not _G._Cr_RainToggle end)
-RegisterCommand("spin", "Spin player", function(args) _G._Cr_SpinSpeed = tonumber(args[2]) or 20; _G._Cr_SpinLoop = not _G._Cr_SpinLoop end)
+RegisterCommand("fpsboost", "Apply FPS boost", function()
+    for _,o in ipairs(Workspace:GetDescendants()) do
+        if o:IsA("BasePart") then pcall(function() o.Material = Enum.Material.SmoothPlastic end) end
+    end
+end)
+
+RegisterCommand("antiafk", "Enable anti AFK", function()
+    player.Idled:Connect(function()
+        local vu = game:GetService("VirtualUser")
+        vu:CaptureController()
+        vu:ClickButton2(Vector2.new())
+    end)
+end)
+
+RegisterCommand("serverhop", "Server hop", function()
+    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+end)
+
+RegisterCommand("rejoin", "Rejoin", function()
+    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+end)
+
+RegisterCommand("fling", "Client fling helper", function()
+    warn("Use the Funny tab fling button for interactive fling")
+end)
+
+RegisterCommand("rainbow", "Toggle Rainbow", function()
+    _G._Cr_RainToggle = not _G._Cr_RainToggle
+end)
+
+RegisterCommand("spin", "Spin player", function(args)
+    _G._Cr_SpinSpeed = tonumber(args[2]) or 20
+    _G._Cr_SpinLoop = not _G._Cr_SpinLoop
+end)
 
 -- ===== Settings tab =====
 do
     tabSettings:Divider(); tabSettings:Section({ Title = "General", TextXAlignment = "Center", TextSize = 17 }); tabSettings:Divider()
     tabSettings:Button({ Title = "Save Settings", Desc = "Save UI settings (if allowed)", Callback = function() warn("[Criptix] Save requested") end })
     tabSettings:Button({ Title = "Load Settings", Desc = "Load UI settings (if present)", Callback = function() warn("[Criptix] Load requested") end })
-    tabSettings:Button({ Title = "Reset To Default", Desc = "Restore defaults", Callback = function() win:SetTheme("Dark"); win:Toggle() end })
+    tabSettings:Button({ Title = "Reset To Default", Desc = "Restore defaults", Callback = function() win:SetTheme("Dark"); warn("[Criptix] Defaults applied") end })
 end
 
 -- ===== Settings UI tab =====
@@ -861,7 +936,7 @@ do
         if win and win._frame then win._frame.BackgroundTransparency = tonumber(v) or 0 end
     end)
     tabSUI:Keybind({ Title = "Toggle UI Keybind", Default = Enum.KeyCode.RightControl, Callback = function(key)
-        -- binds: when key pressed, toggle UI
+        -- bind toggle
         local conn
         conn = UserInputService.InputBegan:Connect(function(inp, processed)
             if processed then return end
@@ -870,7 +945,7 @@ do
     end })
 end
 
--- ===== Mods Tab (plugin loader) =====
+-- ===== Mods tab =====
 do
     tabMods:Divider(); tabMods:Section({ Title = "Plugin Manager", TextXAlignment = "Center", TextSize = 17 }); tabMods:Divider()
     _G.Criptix_ModURL = ""
@@ -886,9 +961,8 @@ do
     tabMods:Button({ Title = "Unload All Mods", Callback = function() Mods = {}; warn("[Criptix] Mods cleared") end })
 end
 
--- ===== Finalize: show the window =====
+-- ===== Finalize: open window =====
 pcall(function() if win and win.Toggle then win:Toggle() end end)
-
-warn("[Criptix] v1.4.0 loaded (Dock + Animation Engine enabled).")
+warn("[Criptix] v1.4.0.2 loaded — Dock (🌐 static), Fade-in animation enabled.")
 
 -- End of file
