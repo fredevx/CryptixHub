@@ -3,7 +3,7 @@
 -- Loads CriptixUI (separate module) and builds the full hub with all tabs & functions.
 
 -- ===== Settings =====
-local CRIPTIXUI_RAW = "https://raw.githubusercontent.com/fredevx/CryptixHub/refs/heads/main/CriptixUI.lua"
+local CRIPTIXUI_RAW = "https://raw.githubusercontent.com/fredevx/CryptixHub/refs/heads/main/CryptixUI.lua"
 local DISCORD_INVITE = "GW9E66m8jt"
 local UI_TITLE = "CriptixHub Universal | v1.4.1"
 local INTERNAL_NAME = "CriptixHubUniversal" -- used by CriptixUI for saving
@@ -541,4 +541,5 @@ if mainGui and mainGui:FindFirstChild("MainFrame") then
 end
 
 -- All done.
+
 
